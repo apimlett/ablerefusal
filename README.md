@@ -1,26 +1,26 @@
 # AbleRefusal
 
-A high-performance, local Stable Diffusion image generation platform with full support for Hugging Face models, LoRAs, and advanced samplers. Features a beautiful Palenight-themed interface and supports models from Hugging Face (UK-accessible alternative to Civitai).
+A decoupled, cross-platform Stable Diffusion platform with a Go backend and React frontend. Features full diffusers support for PyTorch models, automatic Python service management, and a clean web interface for AI image generation.
 
 ## Features
 
-### MVP Features (Current)
-- 🎨 Text-to-image generation using Stable Diffusion
-- 🚀 Full diffusers support with Python inference service
-- 📦 Support for safetensors/ckpt models from Hugging Face
-- 🎭 Dynamic LoRA loading and blending
-- ⚡ LCM (Latent Consistency Models) support
-- 🎯 DPM++ 2M and advanced samplers
-- 🖥️ Clean web interface with real-time progress
-- 💾 Automatic output management
+### Current Features
+- 🎨 Text-to-image generation with Stable Diffusion 1.5 and SDXL
+- 🚀 Python inference service with diffusers library
+- 📦 Direct loading of models from Hugging Face
+- ⚡ GPU acceleration (CUDA/MPS) with CPU fallback
+- 🎯 Multiple sampling methods (Euler A, DPM++, DDIM)
+- 🖥️ React web interface with settings management
+- 🔄 Automatic Python service lifecycle management
+- 💾 Queue management and batch generation
 
-### Coming Soon
-- 🖼️ Image-to-image generation
-- 🎭 LoRA and textual inversion support
+### Planned Features
+- 🎭 LoRA support for model customization
+- 🖼️ Image-to-image and inpainting
 - 🎯 ControlNet integration
-- 🔄 Multiple model support
-- 🖥️ Desktop application (Tauri)
-- 🔌 Plugin system
+- 🔄 Real-time WebSocket updates
+- 🖥️ Desktop application with Tauri
+- 🔌 Plugin system for extensions
 
 ## Quick Start
 
