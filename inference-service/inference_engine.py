@@ -382,12 +382,19 @@ class InferenceEngine:
             actual_seed = torch.randint(0, 2**32, (1,)).item()
             generator = torch.Generator(device=self.device).manual_seed(actual_seed)
         
+        # Ensure dimensions are multiples of 8 (required for SD models)
+        width = request.width - (request.width % 8)
+        height = request.height - (request.height % 8)
+        
+        if width != request.width or height != request.height:
+            logger.warning(f"Adjusting dimensions from {request.width}x{request.height} to {width}x{height} (must be multiples of 8)")
+        
         # Prepare generation kwargs
         generation_kwargs = {
             "prompt": request.prompt,
             "negative_prompt": request.negative_prompt,
-            "width": request.width,
-            "height": request.height,
+            "width": width,
+            "height": height,
             "num_inference_steps": actual_steps,
             "guidance_scale": request.cfg_scale,
             "generator": generator,
