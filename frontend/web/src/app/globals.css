@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Palenight Theme Global Styles */
+@layer base {
+  :root {
+    --palenight-bg: #292D3E;
+    --palenight-bg-light: #32374D;
+    --palenight-bg-dark: #1B1E2B;
+    --palenight-text: #A6ACCD;
+    --palenight-text-bright: #EEFFFF;
+    --palenight-purple: #C792EA;
+    --palenight-blue: #82AAFF;
+    --palenight-cyan: #89DDFF;
+    --palenight-green: #C3E88D;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-palenight-bg text-palenight-text;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  ::selection {
+    @apply bg-palenight-selection text-palenight-textBright;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-palenight-bgDark;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-palenight-border rounded-full hover:bg-palenight-borderLight;
+  }
+}
+
+/* Custom component styles */
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply btn bg-palenight-purple text-palenight-bgDark hover:bg-opacity-90 active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply btn bg-palenight-bgLight text-palenight-text hover:bg-palenight-hover border border-palenight-border;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-palenight-text hover:bg-palenight-hover;
+  }
+
+  .input {
+    @apply w-full px-4 py-2 rounded-lg bg-palenight-bgDark border border-palenight-border 
+           text-palenight-text placeholder-palenight-comment
+           focus:outline-none focus:border-palenight-purple focus:ring-1 focus:ring-palenight-purple
+           transition-colors duration-200;
+  }
+
+  .textarea {
+    @apply input resize-none;
+  }
+
+  .card {
+    @apply bg-palenight-bgLight rounded-xl border border-palenight-border p-6;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-purple {
+    @apply badge bg-palenight-purple bg-opacity-20 text-palenight-purple;
+  }
+
+  .badge-blue {
+    @apply badge bg-palenight-blue bg-opacity-20 text-palenight-blue;
+  }
+
+  .badge-green {
+    @apply badge bg-palenight-green bg-opacity-20 text-palenight-green;
+  }
+
+  .badge-yellow {
+    @apply badge bg-palenight-yellow bg-opacity-20 text-palenight-yellow;
+  }
+
+  .badge-red {
+    @apply badge bg-palenight-red bg-opacity-20 text-palenight-red;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply inline-block w-8 h-8 border-4 border-palenight-purple border-t-transparent rounded-full animate-spin;
+  }
+
+  /* Progress bar */
+  .progress {
+    @apply w-full h-2 bg-palenight-bgDark rounded-full overflow-hidden;
+  }
+
+  .progress-bar {
+    @apply h-full bg-gradient-to-r from-palenight-purple to-palenight-blue transition-all duration-300 ease-out;
+  }
+}
+
+/* Animations */
+@layer utilities {
+  .animate-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+}

@@ -1,4 +1,4 @@
-# Stable Diffusion Platform
+# AbleRefusal
 
 A high-performance, cross-platform Stable Diffusion image generation platform with a decoupled architecture. Generate stunning AI images locally with an easy-to-use interface and no Python dependencies.
 
@@ -35,8 +35,8 @@ A high-performance, cross-platform Stable Diffusion image generation platform wi
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/stable-diffusion-platform.git
-cd stable-diffusion-platform
+git clone https://github.com/yourusername/ablerefusal.git
+cd ablerefusal
 ```
 
 #### 2. Download a Stable Diffusion Model
@@ -354,10 +354,10 @@ python scripts/convert_model.py \
 
 ### Getting Help
 
-- 📖 [Documentation](https://github.com/yourusername/stable-diffusion-platform/wiki)
+- 📖 [Documentation](https://github.com/yourusername/ablerefusal/wiki)
 - 💬 [Discord Community](https://discord.gg/yourdiscord)
-- 🐛 [Report Issues](https://github.com/yourusername/stable-diffusion-platform/issues)
-- 💡 [Feature Requests](https://github.com/yourusername/stable-diffusion-platform/discussions)
+- 🐛 [Report Issues](https://github.com/yourusername/ablerefusal/issues)
+- 💡 [Feature Requests](https://github.com/yourusername/ablerefusal/discussions)
 
 ## Performance Tips
 
@@ -398,7 +398,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/yourusername/stable-diffusion-platform.git
+git clone https://github.com/yourusername/ablerefusal.git
 
 # Create a feature branch
 git checkout -b feature/your-feature

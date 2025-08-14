@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/ablerefusal/stable-diffusion-platform/internal/storage"
+	"github.com/ablerefusal/ablerefusal/internal/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )

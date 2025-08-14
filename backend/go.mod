@@ -1,4 +1,4 @@
-module github.com/ablerefusal/stable-diffusion-platform
+module github.com/ablerefusal/ablerefusal
 
 go 1.21
 

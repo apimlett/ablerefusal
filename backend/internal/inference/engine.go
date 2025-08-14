@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ablerefusal/stable-diffusion-platform/internal/config"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/models"
+	"github.com/ablerefusal/ablerefusal/internal/config"
+	"github.com/ablerefusal/ablerefusal/internal/models"
 	"github.com/sirupsen/logrus"
 )
 

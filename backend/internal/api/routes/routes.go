@@ -3,11 +3,11 @@ package routes
 import (
 	"net/http"
 
-	"github.com/ablerefusal/stable-diffusion-platform/internal/api/handlers"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/api/middleware"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/config"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/queue"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/storage"
+	"github.com/ablerefusal/ablerefusal/internal/api/handlers"
+	"github.com/ablerefusal/ablerefusal/internal/api/middleware"
+	"github.com/ablerefusal/ablerefusal/internal/config"
+	"github.com/ablerefusal/ablerefusal/internal/queue"
+	"github.com/ablerefusal/ablerefusal/internal/storage"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"

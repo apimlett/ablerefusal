@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ablerefusal/stable-diffusion-platform/internal/api/routes"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/config"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/inference"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/logger"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/queue"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/storage"
+	"github.com/ablerefusal/ablerefusal/internal/api/routes"
+	"github.com/ablerefusal/ablerefusal/internal/config"
+	"github.com/ablerefusal/ablerefusal/internal/inference"
+	"github.com/ablerefusal/ablerefusal/internal/logger"
+	"github.com/ablerefusal/ablerefusal/internal/queue"
+	"github.com/ablerefusal/ablerefusal/internal/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -22,7 +22,7 @@ import (
 func main() {
 	// Initialize logger
 	log := logger.New()
-	log.Info("Starting Stable Diffusion Platform Server...")
+	log.Info("Starting AbleRefusal Server...")
 
 	// Load configuration
 	cfg, err := config.Load()

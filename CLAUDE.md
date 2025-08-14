@@ -1,4 +1,4 @@
-# Stable Diffusion Platform - Development Guidelines
+# AbleRefusal - Development Guidelines
 
 ## Project Overview
 This is a decoupled, cross-platform Stable Diffusion platform with a Go backend and React frontend. The architecture separates the backend inference engine from frontend interfaces for maximum flexibility.
@@ -86,7 +86,7 @@ This is a decoupled, cross-platform Stable Diffusion platform with a Go backend 
 ### Backend Development
 ```bash
 cd backend
-go mod init github.com/username/stable-diffusion-platform
+go mod init github.com/ablerefusal/ablerefusal
 go mod tidy
 go run cmd/server/main.go
 go build -o sd-backend cmd/server/main.go

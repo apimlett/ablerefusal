@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/ablerefusal/stable-diffusion-platform/internal/models"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/queue"
+	"github.com/ablerefusal/ablerefusal/internal/models"
+	"github.com/ablerefusal/ablerefusal/internal/queue"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"

@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ablerefusal/stable-diffusion-platform/internal/config"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/inference"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/models"
-	"github.com/ablerefusal/stable-diffusion-platform/internal/storage"
+	"github.com/ablerefusal/ablerefusal/internal/config"
+	"github.com/ablerefusal/ablerefusal/internal/inference"
+	"github.com/ablerefusal/ablerefusal/internal/models"
+	"github.com/ablerefusal/ablerefusal/internal/storage"
 	"github.com/sirupsen/logrus"
 )
 
