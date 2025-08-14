@@ -1,0 +1,41 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Image generation
+torch>=2.0.0
+torchvision
+transformers>=4.35.0
+diffusers>=0.24.0
+accelerate>=0.24.0
+safetensors>=0.4.0
+omegaconf>=2.3.0
+
+# Image processing
+Pillow>=10.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Model loading
+huggingface-hub>=0.19.0
+
+# Optimizations
+xformers>=0.0.22  # For memory efficient attention
+onnxruntime-gpu>=1.16.0  # Optional, for ONNX models
+
+# Samplers and schedulers
+k-diffusion>=0.1.0  # For advanced samplers
+
+# LoRA support
+peft>=0.6.0
+
+# LCM support
+# (included in latest diffusers)
+
+# Utilities
+python-dotenv>=1.0.0
+aiofiles>=23.0.0
+redis>=5.0.0  # For caching
+psutil>=5.9.0  # For system monitoring

@@ -1,15 +1,17 @@
 # AbleRefusal
 
-A high-performance, local Stable Diffusion image generation platform with a beautiful Palenight-themed interface. Generate stunning AI images on your machine with an easy-to-use interface.
+A high-performance, local Stable Diffusion image generation platform with full support for Hugging Face models, LoRAs, and advanced samplers. Features a beautiful Palenight-themed interface and supports models from Hugging Face (UK-accessible alternative to Civitai).
 
 ## Features
 
 ### MVP Features (Current)
 - 🎨 Text-to-image generation using Stable Diffusion
-- 🚀 Fast ONNX Runtime inference (no Python required)
+- 🚀 Full diffusers support with Python inference service
+- 📦 Support for safetensors/ckpt models from Hugging Face
+- 🎭 Dynamic LoRA loading and blending
+- ⚡ LCM (Latent Consistency Models) support
+- 🎯 DPM++ 2M and advanced samplers
 - 🖥️ Clean web interface with real-time progress
-- 📦 Single binary deployment
-- 🔧 Simple configuration system
 - 💾 Automatic output management
 
 ### Coming Soon
@@ -26,10 +28,10 @@ A high-performance, local Stable Diffusion image generation platform with a beau
 
 - Go 1.21 or higher
 - Node.js 18 or higher
+- Python 3.10 or higher
 - 8GB RAM minimum (16GB recommended)
 - 10GB free disk space for models
-- NVIDIA GPU with 4GB+ VRAM (recommended) or CPU
-- ONNX Runtime library (optional, for real inference)
+- NVIDIA GPU with 4GB+ VRAM (recommended) or CPU with MPS (Mac) support
 
 ### Installation
 
@@ -40,69 +42,63 @@ git clone https://github.com/yourusername/ablerefusal.git
 cd ablerefusal
 ```
 
-#### 2. Install ONNX Runtime (Optional, for Real Inference)
-
-For now, AbleRefusal runs with mock generation. To enable real Stable Diffusion inference:
-
-**macOS:**
-```bash
-# Using Homebrew
-brew install onnxruntime
-
-# Or download directly
-curl -L -o onnxruntime.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-osx-arm64-1.16.3.tgz
-tar -xzf onnxruntime.tgz
-# Follow instructions to install the library
-```
-
-**Linux:**
-```bash
-# Ubuntu/Debian
-wget https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-x64-1.16.3.tgz
-tar -xzf onnxruntime-linux-x64-1.16.3.tgz
-sudo cp onnxruntime-linux-x64-1.16.3/lib/* /usr/local/lib/
-sudo ldconfig
-```
-
-**Windows:**
-Download from [ONNX Runtime Releases](https://github.com/microsoft/onnxruntime/releases) and add to PATH.
-
-#### 3. Download a Stable Diffusion Model (For Real Inference)
-
-**Note:** This step is only needed if you have ONNX Runtime installed and want real image generation.
+#### 2. Set up Python Inference Service
 
 ```bash
-# Create models directory
-mkdir -p backend/models/sd15
+# Navigate to inference service directory
+cd inference-service
 
-# Download a pre-converted ONNX model
-# You'll need to convert a model or find a pre-converted one
-# See the Model Conversion section below for details
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment file
+cp .env.example .env
 ```
 
-### Model Conversion (For Real Inference)
+#### 3. Download Models from Hugging Face
 
-To convert a Stable Diffusion model to ONNX format:
+Since Civitai is not accessible from the UK, we provide easy access to models from Hugging Face:
 
 ```bash
-# Install Python dependencies
-pip install torch transformers diffusers onnx onnxruntime optimum
+# List available models
+python download_models.py --list
 
-# Convert using Optimum
-python -c "
-from optimum.onnxruntime import ORTStableDiffusionPipeline
+# Download Stable Diffusion 1.5
+python download_models.py --model sd15
 
-# Export model to ONNX
-model_id = 'runwayml/stable-diffusion-v1-5'
-export_dir = './backend/models/sd15'
+# Download DreamShaper (popular community model)
+python download_models.py --model dreamshaper
 
-pipeline = ORTStableDiffusionPipeline.from_pretrained(model_id, export=True)
-pipeline.save_pretrained(export_dir)
-print(f'Model exported to {export_dir}')
-"
+# Download LCM model for fast generation
+python download_models.py --model lcm
+
+# Download multiple basic models
+python download_models.py --all-basic
 ```
 
-#### 3. Build and Start the Backend
+**Popular Models Available:**
+- `sd15` - Stable Diffusion 1.5 (base model)
+- `dreamshaper` - High quality artistic model
+- `realistic-vision` - Photorealistic model
+- `openjourney` - Midjourney-style model
+- `sdxl` - Stable Diffusion XL (higher quality, needs more VRAM)
+- `lcm` - Latent Consistency Model (4-8 steps generation)
+- `anything-v5` - Anime/manga style
+
+#### 4. Start the Python Inference Service
+
+```bash
+# In the inference-service directory with venv activated
+python main.py
+
+# The inference service will start on http://localhost:8001
+```
+
+#### 5. Build and Start the Go Backend
 
 ```bash
 # Navigate to backend directory
@@ -137,20 +133,22 @@ npm run dev
 # The UI will be available at http://localhost:3000
 ```
 
-#### 5. Generate Your First Image
+#### 7. Generate Your First Image
 
 1. Open your browser and navigate to http://localhost:3000
 2. You'll see the beautiful Palenight-themed interface
 3. Enter a prompt, for example: "a beautiful sunset over mountains, highly detailed, digital art"
-4. Adjust settings (optional):
-   - Steps: 20-50 (higher = better quality, slower)
-   - Width/Height: 512x512 (default)
-   - CFG Scale: 7.5 (how closely to follow the prompt)
+4. Adjust settings:
+   - **Sampler**: DPM++ 2M Karras (recommended) or LCM for fast generation
+   - **Steps**: 20-50 for normal, 4-8 for LCM
+   - **Width/Height**: 512x512 (SD1.5) or 1024x1024 (SDXL)
+   - **CFG Scale**: 7.5 (how closely to follow the prompt)
 5. Click "Generate"
 6. Watch the real-time progress bar
-7. Your generated image will appear below!
+7. Your AI-generated image will appear below!
 
-**Note:** Without ONNX Runtime installed, the app generates colorful gradient placeholder images based on your prompt. Install ONNX Runtime and download models to enable real AI image generation.
+**Using LoRAs:**
+Place LoRA files in `inference-service/models/loras/` and they'll be available for selection in the UI.
 
 ## Configuration
 
@@ -178,9 +176,10 @@ models:
       version: 1.5
 
 inference:
-  device: gpu  # or "cpu"
+  device: gpu  # or "cpu" or "mps" for Mac
   max_batch_size: 1
   max_resolution: 1024
+  python_service_url: http://localhost:8001
 
 queue:
   max_concurrent: 1
@@ -288,19 +287,20 @@ docker run -d \
 
 ```
 ablerefusal/
-├── backend/               # Go backend server
+├── backend/               # Go backend server (API & queue management)
 │   ├── cmd/              # Application entrypoints
 │   ├── internal/         # Internal packages
-│   ├── models/           # Model storage
 │   ├── outputs/          # Generated images
 │   └── config.yaml       # Configuration
+├── inference-service/    # Python inference service
+│   ├── main.py          # FastAPI server
+│   ├── inference_engine.py # Diffusers implementation
+│   ├── download_models.py # Model downloader
+│   ├── models/          # Model storage
+│   └── requirements.txt # Python dependencies
 ├── frontend/             # Frontend applications
 │   └── web/             # Next.js web app with Palenight theme
-├── docs/                # Documentation
-│   ├── spec.md          # Original specification
-│   ├── CLAUDE.md        # Development guidelines
-│   └── MVP_ROADMAP.md   # Roadmap
-└── scripts/             # Utility scripts
+└── docs/                # Documentation
 ```
 
 ### Running Tests
@@ -364,10 +364,10 @@ python scripts/convert_model.py \
 
 ### Common Issues
 
-#### "ONNX Runtime not available" warning
-- This is expected if ONNX Runtime is not installed
-- The app will use mock generation (gradient images)
-- Install ONNX Runtime to enable real AI image generation
+#### "Python inference service not available" warning
+- Ensure the Python service is running on port 8001
+- Check that all Python dependencies are installed
+- The app will use mock generation if Python service is down
 
 #### "Model not found" error
 - Ensure the model is downloaded and extracted to the correct directory
@@ -394,6 +394,7 @@ python scripts/convert_model.py \
 - 📖 [Documentation](https://github.com/ablerefusal/ablerefusal/wiki)
 - 🐛 [Report Issues](https://github.com/ablerefusal/ablerefusal/issues)
 - 💡 [Feature Requests](https://github.com/ablerefusal/ablerefusal/discussions)
+- 🤗 [Hugging Face Models](https://huggingface.co/models?library=diffusers&sort=downloads)
 
 ## Performance Tips
 

@@ -35,6 +35,7 @@ inference:
   max_resolution: 1024
   memory_limit: 4294967296  # 4GB
   use_optimized: true
+  python_service_url: http://localhost:8001
 
 logging:
   level: info

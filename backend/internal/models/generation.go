@@ -8,19 +8,20 @@ import (
 
 // GenerationRequest represents a request to generate an image
 type GenerationRequest struct {
-	ID          string       `json:"id"`
-	Prompt      string       `json:"prompt" binding:"required,min=1,max=1000"`
-	NegPrompt   string       `json:"negative_prompt"`
-	Model       string       `json:"model"`
-	Width       int          `json:"width" binding:"min=64,max=2048"`
-	Height      int          `json:"height" binding:"min=64,max=2048"`
-	Steps       int          `json:"steps" binding:"min=1,max=150"`
-	CFGScale    float64      `json:"cfg_scale" binding:"min=1,max=30"`
-	Seed        int64        `json:"seed"`
-	BatchSize   int          `json:"batch_size" binding:"min=1,max=10"`
-	Sampler     string       `json:"sampler"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	ID          string                 `json:"id"`
+	Prompt      string                 `json:"prompt" binding:"required,min=1,max=1000"`
+	NegPrompt   string                 `json:"negative_prompt"`
+	Model       string                 `json:"model"`
+	Width       int                    `json:"width" binding:"min=64,max=2048"`
+	Height      int                    `json:"height" binding:"min=64,max=2048"`
+	Steps       int                    `json:"steps" binding:"min=1,max=150"`
+	CFGScale    float32                `json:"cfg_scale" binding:"min=1,max=30"`
+	Seed        int64                  `json:"seed"`
+	BatchSize   int                    `json:"batch_size" binding:"min=1,max=10"`
+	Sampler     string                 `json:"sampler"`
+	ExtraParams map[string]interface{} `json:"extra_params,omitempty"`
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
 }
 
 // NewGenerationRequest creates a new generation request with defaults

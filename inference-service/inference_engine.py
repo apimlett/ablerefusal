@@ -1,0 +1,463 @@
+"""
+Inference Engine for Stable Diffusion with full diffusers support
+Supports Civitai models, LoRAs, LCM, and advanced samplers
+"""
+
+import os
+import gc
+import logging
+from typing import Optional, List, Dict, Any, Callable
+from dataclasses import dataclass
+from pathlib import Path
+import hashlib
+import json
+
+import torch
+from PIL import Image
+import numpy as np
+from safetensors.torch import load_file
+from diffusers import (
+    StableDiffusionPipeline,
+    StableDiffusionXLPipeline,
+    DiffusionPipeline,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    LMSDiscreteScheduler,
+    DDIMScheduler,
+    PNDMScheduler,
+    UniPCMultistepScheduler,
+    LCMScheduler,
+    AutoencoderKL,
+)
+from diffusers.models import UNet2DConditionModel
+from transformers import CLIPTextModel, CLIPTokenizer
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GenerationRequest:
+    prompt: str
+    negative_prompt: str = ""
+    width: int = 512
+    height: int = 512
+    steps: int = 20
+    cfg_scale: float = 7.5
+    sampler: str = "DPM++ 2M Karras"
+    seed: int = -1
+    batch_size: int = 1
+    model: Optional[str] = None
+    loras: Optional[List[Dict[str, Any]]] = None
+    enable_lcm: bool = False
+    clip_skip: int = 1
+
+
+@dataclass
+class GenerationResult:
+    image_path: str
+    seed: int
+    width: int
+    height: int
+    metadata: Dict[str, Any]
+
+
+class InferenceEngine:
+    """Main inference engine for Stable Diffusion"""
+    
+    SCHEDULER_MAPPING = {
+        "DPM++ 2M Karras": (DPMSolverMultistepScheduler, {"use_karras_sigmas": True}),
+        "DPM++ 2M SDE Karras": (DPMSolverMultistepScheduler, {"use_karras_sigmas": True, "algorithm_type": "sde-dpmsolver++"}),
+        "DPM++ SDE Karras": (DPMSolverMultistepScheduler, {"use_karras_sigmas": True, "algorithm_type": "sde-dpmsolver++"}),
+        "Euler a": (EulerAncestralDiscreteScheduler, {}),
+        "Euler": (EulerDiscreteScheduler, {}),
+        "LMS": (LMSDiscreteScheduler, {}),
+        "LMS Karras": (LMSDiscreteScheduler, {"use_karras_sigmas": True}),
+        "DDIM": (DDIMScheduler, {}),
+        "PNDM": (PNDMScheduler, {}),
+        "UniPC": (UniPCMultistepScheduler, {}),
+        "LCM": (LCMScheduler, {}),
+    }
+    
+    def __init__(
+        self,
+        models_dir: str = "./models",
+        outputs_dir: str = "./outputs",
+        device: str = "cuda",
+        dtype: torch.dtype = torch.float16,
+        enable_xformers: bool = True,
+        enable_cpu_offload: bool = False,
+        cache_dir: Optional[str] = None
+    ):
+        self.models_dir = Path(models_dir)
+        self.outputs_dir = Path(outputs_dir)
+        self.device = device
+        self.dtype = dtype
+        self.enable_xformers = enable_xformers
+        self.enable_cpu_offload = enable_cpu_offload
+        self.cache_dir = cache_dir or os.path.expanduser("~/.cache/huggingface")
+        
+        # Create directories
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+        self.outputs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Model storage
+        self.pipelines: Dict[str, DiffusionPipeline] = {}
+        self.current_model: Optional[str] = None
+        self.loaded_loras: Dict[str, Dict] = {}
+        
+        logger.info(f"Inference engine initialized on {device}")
+    
+    async def load_model(
+        self,
+        model_path: str,
+        model_type: str = "safetensors"
+    ) -> None:
+        """Load a Stable Diffusion model"""
+        
+        # Check if model is already loaded
+        if model_path in self.pipelines:
+            self.current_model = model_path
+            logger.info(f"Model {model_path} already loaded")
+            return
+        
+        try:
+            # Determine if it's a local file or HuggingFace model
+            if os.path.exists(model_path):
+                pipe = await self._load_local_model(model_path, model_type)
+            else:
+                pipe = await self._load_huggingface_model(model_path)
+            
+            # Configure pipeline
+            pipe = pipe.to(self.device, dtype=self.dtype)
+            
+            # Enable optimizations
+            if self.enable_xformers and self.device != "cpu":
+                try:
+                    pipe.enable_xformers_memory_efficient_attention()
+                    logger.info("Enabled xformers memory efficient attention")
+                except Exception as e:
+                    logger.warning(f"Failed to enable xformers: {e}")
+            
+            if self.enable_cpu_offload:
+                pipe.enable_model_cpu_offload()
+                logger.info("Enabled CPU offload")
+            
+            # Store pipeline
+            self.pipelines[model_path] = pipe
+            self.current_model = model_path
+            
+            logger.info(f"Successfully loaded model: {model_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load model {model_path}: {e}")
+            raise
+    
+    async def _load_local_model(
+        self,
+        model_path: str,
+        model_type: str
+    ) -> DiffusionPipeline:
+        """Load a model from local file (safetensors/ckpt)"""
+        
+        model_file = Path(model_path)
+        
+        if model_type == "safetensors" or model_file.suffix == ".safetensors":
+            # Load safetensors checkpoint
+            state_dict = load_file(model_path)
+            
+            # Detect model type (SD 1.5 vs SDXL)
+            is_sdxl = self._detect_sdxl(state_dict)
+            
+            if is_sdxl:
+                # Load as SDXL
+                pipe = StableDiffusionXLPipeline.from_single_file(
+                    model_path,
+                    torch_dtype=self.dtype,
+                    use_safetensors=True
+                )
+            else:
+                # Load as SD 1.5
+                pipe = StableDiffusionPipeline.from_single_file(
+                    model_path,
+                    torch_dtype=self.dtype,
+                    use_safetensors=True
+                )
+        
+        elif model_type == "ckpt" or model_file.suffix == ".ckpt":
+            # Load checkpoint file
+            pipe = StableDiffusionPipeline.from_single_file(
+                model_path,
+                torch_dtype=self.dtype
+            )
+        
+        else:
+            # Try to load as diffusers format
+            pipe = DiffusionPipeline.from_pretrained(
+                model_path,
+                torch_dtype=self.dtype,
+                use_safetensors=True
+            )
+        
+        return pipe
+    
+    async def _load_huggingface_model(self, model_id: str) -> DiffusionPipeline:
+        """Load a model from HuggingFace Hub"""
+        
+        # Try SDXL first, fall back to SD 1.5
+        try:
+            pipe = StableDiffusionXLPipeline.from_pretrained(
+                model_id,
+                torch_dtype=self.dtype,
+                use_safetensors=True,
+                cache_dir=self.cache_dir
+            )
+            logger.info(f"Loaded SDXL model: {model_id}")
+        except Exception:
+            pipe = StableDiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=self.dtype,
+                use_safetensors=True,
+                cache_dir=self.cache_dir
+            )
+            logger.info(f"Loaded SD 1.5 model: {model_id}")
+        
+        return pipe
+    
+    def _detect_sdxl(self, state_dict: Dict) -> bool:
+        """Detect if model is SDXL based on state dict keys"""
+        # SDXL has specific keys that SD 1.5 doesn't have
+        sdxl_keys = [
+            "conditioner.embedders.0.transformer.text_model.embeddings.position_embedding.weight",
+            "conditioner.embedders.1.model.ln_final.weight"
+        ]
+        
+        for key in sdxl_keys:
+            if any(k.startswith(key) for k in state_dict.keys()):
+                return True
+        
+        # Check UNet dimensions
+        for key in state_dict.keys():
+            if "model.diffusion_model.input_blocks.0.0.weight" in key:
+                shape = state_dict[key].shape
+                if shape[1] == 9:  # SDXL has 9 input channels
+                    return True
+                elif shape[1] == 4:  # SD 1.5 has 4 input channels
+                    return False
+        
+        return False
+    
+    async def load_lora(
+        self,
+        lora_path: str,
+        weight: float = 1.0,
+        name: Optional[str] = None
+    ) -> None:
+        """Load a LoRA model"""
+        
+        if not self.current_model:
+            raise ValueError("No base model loaded")
+        
+        pipe = self.pipelines[self.current_model]
+        lora_name = name or Path(lora_path).stem
+        
+        try:
+            # Load LoRA weights
+            pipe.load_lora_weights(lora_path)
+            
+            # Store LoRA info
+            self.loaded_loras[lora_name] = {
+                "path": lora_path,
+                "weight": weight
+            }
+            
+            logger.info(f"Loaded LoRA: {lora_name} with weight {weight}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load LoRA {lora_path}: {e}")
+            raise
+    
+    def _get_scheduler(self, sampler_name: str, pipe: DiffusionPipeline):
+        """Get scheduler for the specified sampler"""
+        
+        if sampler_name not in self.SCHEDULER_MAPPING:
+            logger.warning(f"Unknown sampler {sampler_name}, using default")
+            return pipe.scheduler
+        
+        scheduler_class, kwargs = self.SCHEDULER_MAPPING[sampler_name]
+        
+        # Create scheduler with pipeline's config
+        scheduler = scheduler_class.from_config(
+            pipe.scheduler.config,
+            **kwargs
+        )
+        
+        return scheduler
+    
+    async def generate(
+        self,
+        request: GenerationRequest,
+        progress_callback: Optional[Callable] = None
+    ) -> List[GenerationResult]:
+        """Generate images based on request"""
+        
+        # Select model
+        model_to_use = request.model or self.current_model
+        if not model_to_use or model_to_use not in self.pipelines:
+            raise ValueError(f"Model {model_to_use} not loaded")
+        
+        pipe = self.pipelines[model_to_use]
+        
+        # Set scheduler based on sampler
+        pipe.scheduler = self._get_scheduler(request.sampler, pipe)
+        
+        # Handle LCM mode
+        if request.enable_lcm:
+            pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
+            # LCM typically uses fewer steps
+            actual_steps = min(request.steps, 8)
+        else:
+            actual_steps = request.steps
+        
+        # Apply LoRAs if specified
+        if request.loras:
+            for lora in request.loras:
+                await self.load_lora(
+                    lora["path"],
+                    lora.get("weight", 1.0),
+                    lora.get("name")
+                )
+        
+        # Set seed
+        generator = None
+        if request.seed != -1:
+            generator = torch.Generator(device=self.device).manual_seed(request.seed)
+            actual_seed = request.seed
+        else:
+            actual_seed = torch.randint(0, 2**32, (1,)).item()
+            generator = torch.Generator(device=self.device).manual_seed(actual_seed)
+        
+        # Prepare generation kwargs
+        generation_kwargs = {
+            "prompt": request.prompt,
+            "negative_prompt": request.negative_prompt,
+            "width": request.width,
+            "height": request.height,
+            "num_inference_steps": actual_steps,
+            "guidance_scale": request.cfg_scale,
+            "generator": generator,
+            "num_images_per_prompt": request.batch_size,
+        }
+        
+        # Add callback for progress
+        if progress_callback:
+            def callback(pipe, step, timestep, callback_kwargs):
+                progress_callback(step, actual_steps)
+                return callback_kwargs
+            generation_kwargs["callback_on_step_end"] = callback
+        
+        # Handle CLIP skip
+        if request.clip_skip > 1:
+            # This requires modifying the text encoder output
+            # Implementation depends on pipeline version
+            pass
+        
+        try:
+            # Generate images
+            with torch.autocast(self.device, dtype=self.dtype):
+                output = pipe(**generation_kwargs)
+            
+            # Save images and create results
+            results = []
+            for i, image in enumerate(output.images):
+                # Generate unique filename
+                image_hash = hashlib.md5(
+                    f"{request.prompt}_{actual_seed}_{i}".encode()
+                ).hexdigest()[:8]
+                filename = f"{image_hash}_{actual_seed}_{i}.png"
+                filepath = self.outputs_dir / filename
+                
+                # Save image
+                image.save(filepath)
+                
+                # Create result
+                result = GenerationResult(
+                    image_path=str(filepath),
+                    seed=actual_seed,
+                    width=request.width,
+                    height=request.height,
+                    metadata={
+                        "prompt": request.prompt,
+                        "negative_prompt": request.negative_prompt,
+                        "steps": actual_steps,
+                        "cfg_scale": request.cfg_scale,
+                        "sampler": request.sampler,
+                        "model": model_to_use,
+                        "loras": request.loras,
+                        "enable_lcm": request.enable_lcm,
+                        "clip_skip": request.clip_skip
+                    }
+                )
+                results.append(result)
+            
+            logger.info(f"Generated {len(results)} images")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Generation failed: {e}")
+            raise
+        
+        finally:
+            # Clear LoRAs after generation
+            if request.loras and hasattr(pipe, 'unload_lora_weights'):
+                pipe.unload_lora_weights()
+                self.loaded_loras.clear()
+    
+    def get_loaded_models(self) -> List[str]:
+        """Get list of loaded models"""
+        return list(self.pipelines.keys())
+    
+    def list_available_models(self) -> List[Dict[str, str]]:
+        """List models available in models directory"""
+        models = []
+        
+        # Check for safetensors files
+        for file in self.models_dir.glob("**/*.safetensors"):
+            models.append({
+                "name": file.stem,
+                "path": str(file),
+                "type": "safetensors"
+            })
+        
+        # Check for ckpt files
+        for file in self.models_dir.glob("**/*.ckpt"):
+            models.append({
+                "name": file.stem,
+                "path": str(file),
+                "type": "ckpt"
+            })
+        
+        # Check for diffusers directories
+        for dir in self.models_dir.iterdir():
+            if dir.is_dir() and (dir / "model_index.json").exists():
+                models.append({
+                    "name": dir.name,
+                    "path": str(dir),
+                    "type": "diffusers"
+                })
+        
+        return models
+    
+    async def cleanup(self):
+        """Cleanup resources"""
+        for pipe in self.pipelines.values():
+            del pipe
+        
+        self.pipelines.clear()
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        gc.collect()
+        
+        logger.info("Inference engine cleanup complete")

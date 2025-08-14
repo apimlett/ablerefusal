@@ -54,11 +54,12 @@ type QueueConfig struct {
 }
 
 type InferenceConfig struct {
-	Device         string `mapstructure:"device"`
-	MaxBatchSize   int    `mapstructure:"max_batch_size"`
-	MaxResolution  int    `mapstructure:"max_resolution"`
-	MemoryLimit    int64  `mapstructure:"memory_limit"`
-	UseOptimized   bool   `mapstructure:"use_optimized"`
+	Device           string `mapstructure:"device"`
+	MaxBatchSize     int    `mapstructure:"max_batch_size"`
+	MaxResolution    int    `mapstructure:"max_resolution"`
+	MemoryLimit      int64  `mapstructure:"memory_limit"`
+	UseOptimized     bool   `mapstructure:"use_optimized"`
+	PythonServiceURL string `mapstructure:"python_service_url"`
 }
 
 type LoggingConfig struct {

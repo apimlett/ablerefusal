@@ -30,8 +30,8 @@ type InferenceEngine struct {
 
 // NewEngine creates a new inference engine
 func NewEngine(config config.InferenceConfig, storageConfig config.StorageConfig, logger *logrus.Logger) (Engine, error) {
-	// Use ONNX engine implementation
-	return NewONNXEngine(config, storageConfig, logger)
+	// Use Python engine for full diffusers support
+	return NewPythonEngine(config, storageConfig, logger)
 }
 
 // Initialize initializes the inference engine
