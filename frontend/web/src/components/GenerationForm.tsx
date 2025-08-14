@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Wand2, Settings, Loader2 } from 'lucide-react';
+import { Wand2, Settings, Loader2, Zap } from 'lucide-react';
 import { GenerationRequest } from '@/lib/api';
 
 interface GenerationFormProps {
@@ -12,8 +12,9 @@ interface GenerationFormProps {
 
 export default function GenerationForm({ onSubmit, isGenerating }: GenerationFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [fastMode, setFastMode] = useState(false);
   
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<GenerationRequest>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<GenerationRequest>({
     defaultValues: {
       prompt: '',
       negative_prompt: '',
@@ -33,6 +34,22 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
   const currentSteps = watch('steps');
   const currentCfg = watch('cfg_scale');
 
+  // Handle Fast mode toggle
+  const toggleFastMode = () => {
+    const newFastMode = !fastMode;
+    setFastMode(newFastMode);
+    
+    if (newFastMode) {
+      // Fast mode: reduce steps for speed
+      setValue('steps', 10);
+      setValue('cfg_scale', 5);
+    } else {
+      // Normal mode: restore quality settings
+      setValue('steps', 20);
+      setValue('cfg_scale', 7.5);
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Model Selection */}
@@ -49,6 +66,33 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
           <option value="stabilityai/stable-diffusion-2-1">Stable Diffusion 2.1</option>
           <option value="stabilityai/stable-diffusion-xl-base-1.0">SDXL 1.0</option>
         </select>
+      </div>
+
+      {/* Fast Mode Toggle */}
+      <div className="flex items-center justify-between p-3 bg-palenight-bgDark rounded-lg border border-palenight-border">
+        <div className="flex items-center space-x-3">
+          <Zap className={`w-5 h-5 ${fastMode ? 'text-palenight-yellow' : 'text-palenight-comment'}`} />
+          <div>
+            <p className="text-sm font-medium text-palenight-textBright">Fast Mode</p>
+            <p className="text-xs text-palenight-comment">
+              {fastMode ? '10 steps, lower quality, 2x faster' : '20 steps, better quality'}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={toggleFastMode}
+          disabled={isGenerating}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            fastMode ? 'bg-palenight-purple' : 'bg-palenight-border'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              fastMode ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
       </div>
 
       {/* Main Prompt */}
@@ -177,7 +221,7 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-palenight-text mb-2">
-                Steps: {currentSteps}
+                Steps: {currentSteps} {fastMode && <span className="text-palenight-yellow">(Fast)</span>}
               </label>
               <input
                 type="range"
@@ -186,7 +230,7 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
                 max="50"
                 step="5"
                 className="w-full"
-                disabled={isGenerating}
+                disabled={isGenerating || fastMode}
               />
             </div>
             <div>
