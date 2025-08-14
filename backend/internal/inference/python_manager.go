@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -111,6 +112,38 @@ func (m *PythonServiceManager) Start(ctx context.Context) error {
 
 	m.isRunning = true
 	m.logger.Info("Python inference service started successfully")
+	
+	// Load default model
+	m.logger.Info("Loading default model...")
+	if err := m.loadDefaultModel(); err != nil {
+		m.logger.WithError(err).Warn("Failed to load default model, service will work but use mock generation")
+	}
+	
+	return nil
+}
+
+// loadDefaultModel loads the default SD 1.5 model
+func (m *PythonServiceManager) loadDefaultModel() error {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	
+	// Load the default model
+	modelPath := "runwayml/stable-diffusion-v1-5"
+	url := fmt.Sprintf("%s/load-model?model_path=%s&model_type=huggingface", m.serviceURL, modelPath)
+	
+	resp, err := client.Post(url, "application/json", nil)
+	if err != nil {
+		return fmt.Errorf("failed to load model: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to load model: %s", string(body))
+	}
+	
+	m.logger.WithField("model", modelPath).Info("Default model loaded successfully")
 	return nil
 }
 

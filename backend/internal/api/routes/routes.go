@@ -51,16 +51,32 @@ func Setup(cfg *config.Config, queueManager queue.Manager, storageManager storag
 		v1.POST("/generate/:id/cancel", generationHandler.Cancel)
 		v1.GET("/queue", statusHandler.GetQueue)
 
-		// Model endpoints (placeholder for now)
+		// Model endpoints
 		v1.GET("/models", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"models": []gin.H{
 					{
-						"id":          "sd15",
-						"name":        "Stable Diffusion v1.5",
-						"type":        "onnx",
+						"id":          "runwayml/stable-diffusion-v1-5",
+						"name":        "Stable Diffusion 1.5",
+						"type":        "pytorch",
 						"version":     "1.5",
 						"description": "Base Stable Diffusion v1.5 model",
+						"ready":       true,
+					},
+					{
+						"id":          "stabilityai/stable-diffusion-2-1",
+						"name":        "Stable Diffusion 2.1",
+						"type":        "pytorch",
+						"version":     "2.1",
+						"description": "Stable Diffusion v2.1 model",
+						"ready":       false,
+					},
+					{
+						"id":          "stabilityai/stable-diffusion-xl-base-1.0",
+						"name":        "SDXL 1.0",
+						"type":        "pytorch",
+						"version":     "xl-1.0",
+						"description": "Stable Diffusion XL base model",
 						"ready":       false,
 					},
 				},

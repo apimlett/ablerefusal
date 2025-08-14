@@ -35,6 +35,22 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* Model Selection */}
+      <div>
+        <label htmlFor="model" className="block text-sm font-medium text-palenight-text mb-2">
+          Model
+        </label>
+        <select
+          {...register('model')}
+          className="input"
+          disabled={isGenerating}
+        >
+          <option value="runwayml/stable-diffusion-v1-5">Stable Diffusion 1.5</option>
+          <option value="stabilityai/stable-diffusion-2-1">Stable Diffusion 2.1</option>
+          <option value="stabilityai/stable-diffusion-xl-base-1.0">SDXL 1.0</option>
+        </select>
+      </div>
+
       {/* Main Prompt */}
       <div>
         <label htmlFor="prompt" className="block text-sm font-medium text-palenight-textBright mb-2">

@@ -14,7 +14,7 @@ export default function RootLayout({
         <title>AbleRefusal</title>
         <meta name="description" content="Generate amazing AI images locally with Stable Diffusion" />
       </head>
-      <body className="antialiased">
+      <body className="antialiased" suppressHydrationWarning>
         <SettingsProvider>
           {children}
         </SettingsProvider>
