@@ -77,7 +77,7 @@ func NewPythonEngine(cfg config.InferenceConfig, storageConfig config.StorageCon
 		logger:        logger,
 		baseURL:       pythonURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 5 * time.Minute, // Increased for image generation
 		},
 		ready: false,
 	}
@@ -268,7 +268,7 @@ func (e *PythonEngine) processResults(req *models.GenerationRequest, status *Pyt
 	for i, imagePath := range status.Results {
 		result := &models.GenerationResult{
 			ImagePath: imagePath,
-			ImageURL:  fmt.Sprintf("/inference/image/%s", imagePath),
+			ImageURL:  fmt.Sprintf("/%s", imagePath), // imagePath already contains "outputs/" prefix
 			Seed:      req.Seed,
 			Width:     req.Width,
 			Height:    req.Height,

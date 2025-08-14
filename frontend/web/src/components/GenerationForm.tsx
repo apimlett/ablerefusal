@@ -24,7 +24,7 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
       seed: -1,
       batch_size: 1,
       sampler: 'euler_a',
-      model: 'sd15',
+      model: 'runwayml/stable-diffusion-v1-5',
     },
   });
 

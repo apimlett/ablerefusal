@@ -35,6 +35,24 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// Start Python inference service if configured
+	var pythonManager *inference.PythonServiceManager
+	if cfg.Inference.PythonServiceURL != "" {
+		pythonManager = inference.NewPythonServiceManager(log, cfg.Inference.PythonServiceURL)
+		
+		ctx := context.Background()
+		if err := pythonManager.Start(ctx); err != nil {
+			log.WithError(err).Warn("Failed to start Python inference service, will continue with mock generation")
+		}
+		
+		// Ensure Python service is stopped on exit
+		defer func() {
+			if pythonManager != nil {
+				pythonManager.Stop()
+			}
+		}()
+	}
+
 	// Initialize storage manager
 	storageManager, err := storage.NewManager(cfg.Storage)
 	if err != nil {
@@ -86,6 +104,14 @@ func main() {
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Stop Python service first
+	if pythonManager != nil && pythonManager.IsRunning() {
+		log.Info("Stopping Python inference service...")
+		if err := pythonManager.Stop(); err != nil {
+			log.WithError(err).Warn("Failed to stop Python service gracefully")
+		}
+	}
 
 	if err := srv.Shutdown(ctx); err != nil {
 		log.WithError(err).Fatal("Server forced to shutdown")

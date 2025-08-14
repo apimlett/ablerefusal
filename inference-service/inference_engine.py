@@ -92,7 +92,8 @@ class InferenceEngine:
         self.models_dir = Path(models_dir)
         self.outputs_dir = Path(outputs_dir)
         self.device = device
-        self.dtype = dtype
+        # MPS requires float32
+        self.dtype = torch.float32 if device == "mps" else dtype
         self.enable_xformers = enable_xformers
         self.enable_cpu_offload = enable_cpu_offload
         self.cache_dir = cache_dir or os.path.expanduser("~/.cache/huggingface")
@@ -129,7 +130,11 @@ class InferenceEngine:
                 pipe = await self._load_huggingface_model(model_path)
             
             # Configure pipeline
-            pipe = pipe.to(self.device, dtype=self.dtype)
+            # MPS requires float32
+            if self.device == "mps":
+                pipe = pipe.to(self.device, dtype=torch.float32)
+            else:
+                pipe = pipe.to(self.device, dtype=self.dtype)
             
             # Enable optimizations
             if self.enable_xformers and self.device != "cpu":
@@ -147,7 +152,12 @@ class InferenceEngine:
             self.pipelines[model_path] = pipe
             self.current_model = model_path
             
+            # Log pipeline components
             logger.info(f"Successfully loaded model: {model_path}")
+            logger.info(f"Pipeline components - tokenizer: {pipe.tokenizer is not None}, "
+                       f"text_encoder: {hasattr(pipe, 'text_encoder') and pipe.text_encoder is not None}, "
+                       f"unet: {hasattr(pipe, 'unet') and pipe.unet is not None}, "
+                       f"vae: {hasattr(pipe, 'vae') and pipe.vae is not None}")
             
         except Exception as e:
             logger.error(f"Failed to load model {model_path}: {e}")
@@ -204,25 +214,47 @@ class InferenceEngine:
     async def _load_huggingface_model(self, model_id: str) -> DiffusionPipeline:
         """Load a model from HuggingFace Hub"""
         
-        # Try SDXL first, fall back to SD 1.5
-        try:
-            pipe = StableDiffusionXLPipeline.from_pretrained(
-                model_id,
-                torch_dtype=self.dtype,
-                use_safetensors=True,
-                cache_dir=self.cache_dir
-            )
-            logger.info(f"Loaded SDXL model: {model_id}")
-        except Exception:
-            pipe = StableDiffusionPipeline.from_pretrained(
-                model_id,
-                torch_dtype=self.dtype,
-                use_safetensors=True,
-                cache_dir=self.cache_dir
-            )
-            logger.info(f"Loaded SD 1.5 model: {model_id}")
+        # Try different loading strategies
+        # For SD 1.5 models, try SD pipeline first
+        if "stable-diffusion-v1" in model_id or "sd-v1" in model_id.lower():
+            strategies = [
+                # Try SD 1.5 with safetensors first for v1 models
+                (StableDiffusionPipeline, True, "SD 1.5 with safetensors"),
+                (StableDiffusionPipeline, False, "SD 1.5 with .bin"),
+                (DiffusionPipeline, True, "Generic with safetensors"),
+                (DiffusionPipeline, False, "Generic with .bin"),
+            ]
+        else:
+            strategies = [
+                # Try SDXL first for newer models
+                (StableDiffusionXLPipeline, True, "SDXL with safetensors"),
+                (StableDiffusionPipeline, True, "SD 1.5 with safetensors"),
+                (DiffusionPipeline, True, "Generic with safetensors"),
+                (DiffusionPipeline, False, "Generic with .bin"),
+            ]
         
-        return pipe
+        last_error = None
+        for pipeline_class, use_safetensors, desc in strategies:
+            try:
+                kwargs = {
+                    "torch_dtype": self.dtype,
+                    "cache_dir": self.cache_dir,
+                    "local_files_only": False,
+                    "safety_checker": None,
+                    "requires_safety_checker": False
+                }
+                if use_safetensors:
+                    kwargs["use_safetensors"] = True
+                    
+                pipe = pipeline_class.from_pretrained(model_id, **kwargs)
+                logger.info(f"Loaded model using {desc}: {model_id}")
+                return pipe
+            except Exception as e:
+                last_error = e
+                continue
+        
+        # If all strategies failed, raise the last error
+        raise last_error
     
     def _detect_sdxl(self, state_dict: Dict) -> bool:
         """Detect if model is SDXL based on state dict keys"""
@@ -307,6 +339,19 @@ class InferenceEngine:
             raise ValueError(f"Model {model_to_use} not loaded")
         
         pipe = self.pipelines[model_to_use]
+        
+        # Log what we're getting
+        logger.info(f"Retrieved pipeline for model {model_to_use}")
+        logger.info(f"Pipeline type: {type(pipe)}")
+        logger.info(f"Pipeline has tokenizer attr: {hasattr(pipe, 'tokenizer')}")
+        if hasattr(pipe, 'tokenizer'):
+            logger.info(f"Tokenizer value: {pipe.tokenizer}")
+        
+        # Check pipeline components
+        if not hasattr(pipe, 'tokenizer') or pipe.tokenizer is None:
+            logger.error(f"Pipeline for model {model_to_use} missing tokenizer")
+            logger.error(f"Available attributes: {dir(pipe)}")
+            raise ValueError(f"Pipeline for model {model_to_use} is not properly initialized")
         
         # Set scheduler based on sampler
         pipe.scheduler = self._get_scheduler(request.sampler, pipe)

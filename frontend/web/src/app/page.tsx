@@ -1,19 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Github, Server, AlertCircle } from 'lucide-react';
+import { Sparkles, Github, Server, AlertCircle, Settings as SettingsIcon } from 'lucide-react';
 import GenerationForm from '@/components/GenerationForm';
 import ImageGallery from '@/components/ImageGallery';
 import GenerationProgress from '@/components/GenerationProgress';
+import Settings from '@/components/Settings';
+import { useSettings } from '@/contexts/SettingsContext';
 import sdApi, { GenerationRequest, GenerationResult, GenerationStatus } from '@/lib/api';
 
 export default function Home() {
+  const { settings } = useSettings();
   const [images, setImages] = useState<GenerationResult[]>([]);
   const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isBackendReady, setIsBackendReady] = useState<boolean | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Check backend status on mount
   useEffect(() => {
@@ -112,6 +116,15 @@ export default function Home() {
                 </span>
               </div>
               
+              {/* Settings Button */}
+              <button
+                onClick={() => setShowSettings(true)}
+                className="p-2 text-palenight-text hover:text-palenight-textBright transition-colors"
+                title="Settings"
+              >
+                <SettingsIcon className="w-5 h-5" />
+              </button>
+              
               {/* GitHub Link */}
               <a
                 href="https://github.com/yourusername/ablerefusal"
@@ -193,13 +206,16 @@ export default function Home() {
       <footer className="mt-16 border-t border-palenight-border">
         <div className="container mx-auto px-4 py-6">
           <div className="text-center text-sm text-palenight-comment">
-            <p>Built with Next.js, Go, and ONNX Runtime</p>
+            <p>Built with Next.js, Go, and Python Diffusers</p>
             <p className="mt-1">
               Palenight theme • Open source • Local inference
             </p>
           </div>
         </div>
       </footer>
+
+      {/* Settings Modal */}
+      <Settings isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }

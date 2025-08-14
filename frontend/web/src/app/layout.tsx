@@ -1,10 +1,7 @@
-import type { Metadata } from "next";
-import "./globals.css";
+'use client';
 
-export const metadata: Metadata = {
-  title: "AbleRefusal",
-  description: "Generate amazing AI images locally with Stable Diffusion",
-};
+import { SettingsProvider } from "@/contexts/SettingsContext";
+import "./globals.css";
 
 export default function RootLayout({
   children,
@@ -13,8 +10,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <title>AbleRefusal</title>
+        <meta name="description" content="Generate amazing AI images locally with Stable Diffusion" />
+      </head>
       <body className="antialiased">
-        {children}
+        <SettingsProvider>
+          {children}
+        </SettingsProvider>
       </body>
     </html>
   );

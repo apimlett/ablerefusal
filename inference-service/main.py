@@ -7,15 +7,16 @@ import os
 import asyncio
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 import uvicorn
+import torch
 
 from inference_engine import InferenceEngine, GenerationRequest, GenerationResult
 
@@ -89,6 +90,15 @@ class JobStatus(BaseModel):
     error: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
+    
+    @field_serializer('created_at', 'completed_at')
+    def serialize_datetime(self, dt: Optional[datetime], _info) -> Optional[str]:
+        if dt:
+            # Ensure timezone-aware and format as ISO 8601 with Z suffix for UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat().replace('+00:00', 'Z')
+        return None
 
 
 @app.on_event("startup")
@@ -99,10 +109,18 @@ async def startup_event():
     logger.info("Starting AbleRefusal Inference Service...")
     
     # Initialize inference engine
+    # Use MPS on Mac, CUDA on Linux/Windows, CPU as fallback
+    if torch.backends.mps.is_available():
+        default_device = "mps"
+    elif torch.cuda.is_available():
+        default_device = "cuda"
+    else:
+        default_device = "cpu"
+    
     inference_engine = InferenceEngine(
         models_dir=os.getenv("MODELS_DIR", "./models"),
         outputs_dir=os.getenv("OUTPUTS_DIR", "./outputs"),
-        device=os.getenv("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
+        device=os.getenv("DEVICE", default_device)
     )
     
     # Load default model if specified
@@ -158,7 +176,7 @@ async def generate_image(
         "progress": 0.0,
         "current_step": 0,
         "total_steps": request.steps,
-        "created_at": datetime.now(),
+        "created_at": datetime.now(timezone.utc),
         "request": request.dict()
     }
     
@@ -214,13 +232,13 @@ async def run_generation(job_id: str, request: GenerateRequest):
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["progress"] = 100.0
         jobs[job_id]["results"] = [r.image_path for r in results]
-        jobs[job_id]["completed_at"] = datetime.now()
+        jobs[job_id]["completed_at"] = datetime.now(timezone.utc)
         
     except Exception as e:
         logger.error(f"Generation failed for job {job_id}: {e}")
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
-        jobs[job_id]["completed_at"] = datetime.now()
+        jobs[job_id]["completed_at"] = datetime.now(timezone.utc)
 
 
 @app.get("/job/{job_id}", response_model=JobStatus)
