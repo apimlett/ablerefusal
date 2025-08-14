@@ -1,0 +1,4 @@
+{
+  "tokenizer_class": "CLIPTokenizer",
+  "model_max_length": 77
+}

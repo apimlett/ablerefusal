@@ -1,0 +1,44 @@
+# Stable Diffusion Platform Configuration
+
+server:
+  host: localhost
+  port: 8080
+  environment: development
+  read_timeout: 30
+  write_timeout: 30
+  enable_cors: true
+
+storage:
+  output_dir: ./outputs
+  models_dir: ./models
+  temp_dir: ./temp
+  max_file_size: 10737418240  # 10GB
+
+models:
+  default: sd15
+  auto_download: false
+  available:
+    - name: sd15
+      path: ./models/sd15
+      type: onnx
+      version: "1.5"
+      description: "Stable Diffusion v1.5 ONNX model"
+
+queue:
+  max_concurrent: 1
+  max_queue_size: 100
+  timeout: 300  # 5 minutes
+
+inference:
+  device: cpu  # cpu or gpu
+  max_batch_size: 1
+  max_resolution: 1024
+  memory_limit: 4294967296  # 4GB
+  use_optimized: true
+
+logging:
+  level: info
+  file: ""  # Empty for stdout only
+  max_size: 100  # MB
+  max_backups: 3
+  max_age: 7  # days
