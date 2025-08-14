@@ -42,7 +42,7 @@ func main() {
 	}
 
 	// Initialize inference engine
-	inferenceEngine, err := inference.NewEngine(cfg.Inference, log)
+	inferenceEngine, err := inference.NewEngine(cfg.Inference, cfg.Storage, log)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to initialize inference engine")
 	}

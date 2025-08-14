@@ -29,20 +29,9 @@ type InferenceEngine struct {
 }
 
 // NewEngine creates a new inference engine
-func NewEngine(config config.InferenceConfig, logger *logrus.Logger) (Engine, error) {
-	engine := &InferenceEngine{
-		config:       config,
-		logger:       logger,
-		loadedModels: make(map[string]bool),
-		ready:        false,
-	}
-
-	// Initialize engine
-	if err := engine.Initialize(); err != nil {
-		return nil, err
-	}
-
-	return engine, nil
+func NewEngine(config config.InferenceConfig, storageConfig config.StorageConfig, logger *logrus.Logger) (Engine, error) {
+	// Use ONNX engine implementation
+	return NewONNXEngine(config, storageConfig, logger)
 }
 
 // Initialize initializes the inference engine

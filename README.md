@@ -1,6 +1,6 @@
 # AbleRefusal
 
-A high-performance, cross-platform Stable Diffusion image generation platform with a decoupled architecture. Generate stunning AI images locally with an easy-to-use interface and no Python dependencies.
+A high-performance, local Stable Diffusion image generation platform with a beautiful Palenight-themed interface. Generate stunning AI images on your machine with an easy-to-use interface.
 
 ## Features
 
@@ -29,6 +29,7 @@ A high-performance, cross-platform Stable Diffusion image generation platform wi
 - 8GB RAM minimum (16GB recommended)
 - 10GB free disk space for models
 - NVIDIA GPU with 4GB+ VRAM (recommended) or CPU
+- ONNX Runtime library (optional, for real inference)
 
 ### Installation
 
@@ -39,39 +40,66 @@ git clone https://github.com/yourusername/ablerefusal.git
 cd ablerefusal
 ```
 
-#### 2. Download a Stable Diffusion Model
+#### 2. Install ONNX Runtime (Optional, for Real Inference)
 
-We'll use a pre-converted ONNX model for the quickest setup. Download the Stable Diffusion v1.5 ONNX model:
+For now, AbleRefusal runs with mock generation. To enable real Stable Diffusion inference:
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install onnxruntime
+
+# Or download directly
+curl -L -o onnxruntime.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-osx-arm64-1.16.3.tgz
+tar -xzf onnxruntime.tgz
+# Follow instructions to install the library
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+wget https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-x64-1.16.3.tgz
+tar -xzf onnxruntime-linux-x64-1.16.3.tgz
+sudo cp onnxruntime-linux-x64-1.16.3/lib/* /usr/local/lib/
+sudo ldconfig
+```
+
+**Windows:**
+Download from [ONNX Runtime Releases](https://github.com/microsoft/onnxruntime/releases) and add to PATH.
+
+#### 3. Download a Stable Diffusion Model (For Real Inference)
+
+**Note:** This step is only needed if you have ONNX Runtime installed and want real image generation.
 
 ```bash
 # Create models directory
-mkdir -p models/sd15
+mkdir -p backend/models/sd15
 
-# Download the model (using wget or curl)
-# Option 1: Using wget
-wget -O models/sd15/stable_diffusion_onnx.zip https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/stable_diffusion_onnx.zip
-
-# Option 2: Using curl
-curl -L -o models/sd15/stable_diffusion_onnx.zip https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/stable_diffusion_onnx.zip
-
-# Extract the model
-cd models/sd15
-unzip stable_diffusion_onnx.zip
-cd ../..
+# Download a pre-converted ONNX model
+# You'll need to convert a model or find a pre-converted one
+# See the Model Conversion section below for details
 ```
 
-**Alternative: Convert from PyTorch Model**
+### Model Conversion (For Real Inference)
 
-If you prefer to convert a model yourself (requires Python):
+To convert a Stable Diffusion model to ONNX format:
 
 ```bash
 # Install Python dependencies
-pip install torch transformers diffusers onnx onnxruntime
+pip install torch transformers diffusers onnx onnxruntime optimum
 
-# Run conversion script
-python scripts/convert_model.py \
-  --model_id "runwayml/stable-diffusion-v1-5" \
-  --output_path "./models/sd15"
+# Convert using Optimum
+python -c "
+from optimum.onnxruntime import ORTStableDiffusionPipeline
+
+# Export model to ONNX
+model_id = 'runwayml/stable-diffusion-v1-5'
+export_dir = './backend/models/sd15'
+
+pipeline = ORTStableDiffusionPipeline.from_pretrained(model_id, export=True)
+pipeline.save_pretrained(export_dir)
+print(f'Model exported to {export_dir}')
+"
 ```
 
 #### 3. Build and Start the Backend
@@ -84,10 +112,10 @@ cd backend
 go mod download
 
 # Build the server
-go build -o sd-backend cmd/server/main.go
+go build -o ablerefusal-backend cmd/server/main.go
 
 # Run the server
-./sd-backend
+./ablerefusal-backend
 
 # The server will start on http://localhost:8080
 ```
@@ -112,14 +140,17 @@ npm run dev
 #### 5. Generate Your First Image
 
 1. Open your browser and navigate to http://localhost:3000
-2. Enter a prompt, for example: "a beautiful sunset over mountains, highly detailed, digital art"
-3. Adjust settings (optional):
+2. You'll see the beautiful Palenight-themed interface
+3. Enter a prompt, for example: "a beautiful sunset over mountains, highly detailed, digital art"
+4. Adjust settings (optional):
    - Steps: 20-50 (higher = better quality, slower)
    - Width/Height: 512x512 (default)
    - CFG Scale: 7.5 (how closely to follow the prompt)
-4. Click "Generate"
-5. Watch the real-time progress bar
-6. Your generated image will appear below!
+5. Click "Generate"
+6. Watch the real-time progress bar
+7. Your generated image will appear below!
+
+**Note:** Without ONNX Runtime installed, the app generates colorful gradient placeholder images based on your prompt. Install ONNX Runtime and download models to enable real AI image generation.
 
 ## Configuration
 
@@ -232,23 +263,23 @@ docker-compose down
 
 ```bash
 # Build backend
-docker build -t sd-backend ./backend
+docker build -t ablerefusal-backend ./backend
 
 # Build frontend
-docker build -t sd-frontend ./frontend/web
+docker build -t ablerefusal-frontend ./frontend/web
 
 # Run backend
 docker run -d \
   -p 8080:8080 \
-  -v $(pwd)/models:/app/models \
-  -v $(pwd)/outputs:/app/outputs \
-  sd-backend
+  -v $(pwd)/backend/models:/app/models \
+  -v $(pwd)/backend/outputs:/app/outputs \
+  ablerefusal-backend
 
 # Run frontend
 docker run -d \
   -p 3000:3000 \
   -e NEXT_PUBLIC_API_URL=http://localhost:8080 \
-  sd-frontend
+  ablerefusal-frontend
 ```
 
 ## Development
@@ -256,19 +287,20 @@ docker run -d \
 ### Project Structure
 
 ```
-stable-diffusion-platform/
+ablerefusal/
 ├── backend/               # Go backend server
 │   ├── cmd/              # Application entrypoints
 │   ├── internal/         # Internal packages
-│   └── pkg/              # Public packages
+│   ├── models/           # Model storage
+│   ├── outputs/          # Generated images
+│   └── config.yaml       # Configuration
 ├── frontend/             # Frontend applications
-│   ├── web/             # Next.js web app
-│   ├── desktop/         # Tauri desktop app
-│   └── shared/          # Shared components
-├── models/              # Model storage
-├── outputs/             # Generated images
-├── scripts/             # Utility scripts
-└── docs/                # Documentation
+│   └── web/             # Next.js web app with Palenight theme
+├── docs/                # Documentation
+│   ├── spec.md          # Original specification
+│   ├── CLAUDE.md        # Development guidelines
+│   └── MVP_ROADMAP.md   # Roadmap
+└── scripts/             # Utility scripts
 ```
 
 ### Running Tests
@@ -332,6 +364,11 @@ python scripts/convert_model.py \
 
 ### Common Issues
 
+#### "ONNX Runtime not available" warning
+- This is expected if ONNX Runtime is not installed
+- The app will use mock generation (gradient images)
+- Install ONNX Runtime to enable real AI image generation
+
 #### "Model not found" error
 - Ensure the model is downloaded and extracted to the correct directory
 - Check the model path in `config.yaml`
@@ -354,10 +391,9 @@ python scripts/convert_model.py \
 
 ### Getting Help
 
-- 📖 [Documentation](https://github.com/yourusername/ablerefusal/wiki)
-- 💬 [Discord Community](https://discord.gg/yourdiscord)
-- 🐛 [Report Issues](https://github.com/yourusername/ablerefusal/issues)
-- 💡 [Feature Requests](https://github.com/yourusername/ablerefusal/discussions)
+- 📖 [Documentation](https://github.com/ablerefusal/ablerefusal/wiki)
+- 🐛 [Report Issues](https://github.com/ablerefusal/ablerefusal/issues)
+- 💡 [Feature Requests](https://github.com/ablerefusal/ablerefusal/discussions)
 
 ## Performance Tips
 
