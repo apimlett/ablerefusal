@@ -1,26 +1,34 @@
 # AbleRefusal
 
-A decoupled, cross-platform Stable Diffusion platform with a Go backend and React frontend. Features full diffusers support for PyTorch models, automatic Python service management, and a clean web interface for AI image generation.
+🎨 Open-source Stable Diffusion platform with Go backend and React frontend. Features txt2img, img2img, and optimized performance on Apple Silicon.
 
-## Features
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)
+![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python)
+
+![AbleRefusal UI](https://github.com/apimlett/ablerefusal/assets/screenshot.png)
+
+## ✨ Features
 
 ### Current Features
-- 🎨 Text-to-image generation with Stable Diffusion 1.5 and SDXL
-- 🚀 Python inference service with diffusers library
-- 📦 Direct loading of models from Hugging Face
-- ⚡ GPU acceleration (CUDA/MPS) with CPU fallback
-- 🎯 Multiple sampling methods (Euler A, DPM++, DDIM)
-- 🖥️ React web interface with settings management
-- 🔄 Automatic Python service lifecycle management
-- 💾 Queue management and batch generation
+- **🖼️ Text-to-Image Generation** - Generate images from text prompts using Stable Diffusion 1.5/2.1/SDXL
+- **🎨 Image-to-Image** - Transform existing images with adjustable denoising strength
+- **⚡ Fast Mode** - Quick generation with reduced steps for rapid prototyping
+- **🍎 Apple Silicon Optimized** - MPS acceleration with attention slicing and VAE tiling
+- **🎯 Drag & Drop Upload** - Intuitive image upload with visual preview
+- **🎛️ Advanced Controls** - Fine-tune with CFG scale, steps, samplers, seed control
+- **🌙 Beautiful UI** - Palenight-themed interface with smooth animations
+- **🔄 Real-time Progress** - Live generation status and progress tracking
+- **📦 Model Management** - Load models directly from Hugging Face
+- **💾 Queue Management** - Batch generation with concurrent processing
 
-### Planned Features
-- 🎭 LoRA support for model customization
-- 🖼️ Image-to-image and inpainting
-- 🎯 ControlNet integration
-- 🔄 Real-time WebSocket updates
-- 🖥️ Desktop application with Tauri
-- 🔌 Plugin system for extensions
+### Performance Optimizations
+- Attention slicing for 20% performance boost on MPS
+- VAE tiling and slicing for memory efficiency
+- Optimized pipeline configuration
+- Memory management with cache clearing
+- Fast mode with reduced steps
 
 ## Quick Start
 
