@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Wand2, Settings, Loader2, Zap } from 'lucide-react';
 import { GenerationRequest } from '@/lib/api';
+import ImageUpload from './ImageUpload';
 
 interface GenerationFormProps {
   onSubmit: (data: GenerationRequest) => Promise<void>;
@@ -13,6 +14,7 @@ interface GenerationFormProps {
 export default function GenerationForm({ onSubmit, isGenerating }: GenerationFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [fastMode, setFastMode] = useState(false);
+  const [initImage, setInitImage] = useState<string | null>(null);
   
   const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<GenerationRequest>({
     defaultValues: {
@@ -26,6 +28,7 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
       batch_size: 1,
       sampler: 'euler_a',
       model: 'runwayml/stable-diffusion-v1-5',
+      strength: 0.75,
     },
   });
 
@@ -33,6 +36,7 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
   const currentHeight = watch('height');
   const currentSteps = watch('steps');
   const currentCfg = watch('cfg_scale');
+  const currentStrength = watch('strength');
 
   // Handle Fast mode toggle
   const toggleFastMode = () => {
@@ -50,8 +54,17 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
     }
   };
 
+  // Handle form submission with img2img support
+  const onFormSubmit = handleSubmit(async (data) => {
+    const submissionData = {
+      ...data,
+      init_image: initImage || undefined,
+    };
+    await onSubmit(submissionData);
+  });
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={onFormSubmit} className="space-y-6">
       {/* Model Selection */}
       <div>
         <label htmlFor="model" className="block text-sm font-medium text-palenight-text mb-2">
@@ -125,6 +138,35 @@ export default function GenerationForm({ onSubmit, isGenerating }: GenerationFor
           disabled={isGenerating}
         />
       </div>
+
+      {/* Image Upload for img2img */}
+      <ImageUpload
+        onImageSelect={setInitImage}
+        onImageClear={() => setInitImage(null)}
+        currentImage={initImage}
+        disabled={isGenerating}
+      />
+
+      {/* Strength control for img2img */}
+      {initImage && (
+        <div>
+          <label className="block text-sm font-medium text-palenight-text mb-2">
+            Denoising Strength: {currentStrength}
+            <span className="text-xs text-palenight-comment ml-2">
+              (0 = keep original, 1 = full generation)
+            </span>
+          </label>
+          <input
+            type="range"
+            {...register('strength', { valueAsNumber: true })}
+            min="0"
+            max="1"
+            step="0.05"
+            className="w-full"
+            disabled={isGenerating}
+          />
+        </div>
+      )}
 
       {/* Advanced Settings Toggle */}
       <button

@@ -71,6 +71,9 @@ class GenerateRequest(BaseModel):
     loras: Optional[List[Dict[str, Any]]] = None
     enable_lcm: bool = False
     clip_skip: int = Field(default=1, ge=1, le=12)
+    # Image-to-image parameters
+    init_image: Optional[str] = None  # Base64 encoded image
+    strength: float = Field(default=0.75, ge=0.0, le=1.0)  # Denoising strength
 
 
 class GenerateResponse(BaseModel):
@@ -206,7 +209,8 @@ async def run_generation(job_id: str, request: GenerateRequest):
             jobs[job_id]["total_steps"] = total
         
         # Convert request to engine format
-        gen_request = GenerationRequest(
+        from inference_engine import GenerationRequest as EngineGenerationRequest
+        gen_request = EngineGenerationRequest(
             prompt=request.prompt,
             negative_prompt=request.negative_prompt,
             width=request.width,
@@ -219,7 +223,9 @@ async def run_generation(job_id: str, request: GenerateRequest):
             model=request.model,
             loras=request.loras,
             enable_lcm=request.enable_lcm,
-            clip_skip=request.clip_skip
+            clip_skip=request.clip_skip,
+            init_image=request.init_image,
+            strength=request.strength
         )
         
         # Run generation

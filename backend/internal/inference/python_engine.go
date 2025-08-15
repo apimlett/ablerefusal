@@ -40,6 +40,9 @@ type PythonGenerateRequest struct {
 	Loras          []map[string]interface{} `json:"loras,omitempty"`
 	EnableLCM      bool                     `json:"enable_lcm"`
 	ClipSkip       int                      `json:"clip_skip"`
+	// Image-to-image parameters
+	InitImage string  `json:"init_image,omitempty"`
+	Strength  float32 `json:"strength,omitempty"`
 }
 
 // PythonGenerateResponse represents the response from Python service
@@ -172,6 +175,8 @@ func (e *PythonEngine) Generate(ctx context.Context, req *models.GenerationReque
 		Model:          req.Model,
 		EnableLCM:      false,
 		ClipSkip:       1,
+		InitImage:      req.InitImage,
+		Strength:       req.Strength,
 	}
 
 	// Parse extra parameters if present

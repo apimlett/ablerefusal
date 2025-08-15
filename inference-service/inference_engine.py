@@ -19,7 +19,9 @@ import numpy as np
 from safetensors.torch import load_file
 from diffusers import (
     StableDiffusionPipeline,
+    StableDiffusionImg2ImgPipeline,
     StableDiffusionXLPipeline,
+    StableDiffusionXLImg2ImgPipeline,
     DiffusionPipeline,
     DPMSolverMultistepScheduler,
     EulerAncestralDiscreteScheduler,
@@ -52,6 +54,9 @@ class GenerationRequest:
     loras: Optional[List[Dict[str, Any]]] = None
     enable_lcm: bool = False
     clip_skip: int = 1
+    # Image-to-image parameters
+    init_image: Optional[str] = None  # Base64 encoded image or file path
+    strength: float = 0.75  # Denoising strength (0.0 = no change, 1.0 = full generation)
 
 
 @dataclass
@@ -105,6 +110,7 @@ class InferenceEngine:
         
         # Model storage
         self.pipelines: Dict[str, DiffusionPipeline] = {}
+        self.img2img_pipelines: Dict[str, DiffusionPipeline] = {}
         self.current_model: Optional[str] = None
         self.loaded_loras: Dict[str, Dict] = {}
         
@@ -195,6 +201,9 @@ class InferenceEngine:
             # Store pipeline
             self.pipelines[model_path] = pipe
             self.current_model = model_path
+            
+            # Create img2img pipeline from the same components
+            self._create_img2img_pipeline(model_path, pipe)
             
             # Log pipeline components
             logger.info(f"Successfully loaded model: {model_path}")
@@ -300,6 +309,82 @@ class InferenceEngine:
         # If all strategies failed, raise the last error
         raise last_error
     
+    def _create_img2img_pipeline(self, model_path: str, txt2img_pipe: DiffusionPipeline) -> None:
+        """Create img2img pipeline from txt2img pipeline components"""
+        try:
+            # Determine pipeline type and create corresponding img2img pipeline
+            if isinstance(txt2img_pipe, StableDiffusionXLPipeline):
+                img2img_pipe = StableDiffusionXLImg2ImgPipeline(
+                    vae=txt2img_pipe.vae,
+                    text_encoder=txt2img_pipe.text_encoder,
+                    text_encoder_2=txt2img_pipe.text_encoder_2 if hasattr(txt2img_pipe, 'text_encoder_2') else None,
+                    tokenizer=txt2img_pipe.tokenizer,
+                    tokenizer_2=txt2img_pipe.tokenizer_2 if hasattr(txt2img_pipe, 'tokenizer_2') else None,
+                    unet=txt2img_pipe.unet,
+                    scheduler=txt2img_pipe.scheduler,
+                )
+            elif isinstance(txt2img_pipe, StableDiffusionPipeline):
+                img2img_pipe = StableDiffusionImg2ImgPipeline(
+                    vae=txt2img_pipe.vae,
+                    text_encoder=txt2img_pipe.text_encoder,
+                    tokenizer=txt2img_pipe.tokenizer,
+                    unet=txt2img_pipe.unet,
+                    scheduler=txt2img_pipe.scheduler,
+                    safety_checker=None,
+                    feature_extractor=None,
+                    requires_safety_checker=False,
+                )
+            else:
+                logger.warning(f"Unknown pipeline type for img2img: {type(txt2img_pipe)}")
+                return
+            
+            # Apply same device and dtype
+            if self.device == "mps":
+                img2img_pipe = img2img_pipe.to(self.device, dtype=torch.float32)
+            else:
+                img2img_pipe = img2img_pipe.to(self.device, dtype=self.dtype)
+            
+            # Apply same optimizations
+            if self.device == "mps":
+                img2img_pipe.enable_attention_slicing()
+            
+            if hasattr(img2img_pipe, 'vae') and hasattr(img2img_pipe.vae, 'enable_tiling'):
+                img2img_pipe.vae.enable_tiling()
+            
+            if hasattr(img2img_pipe, 'enable_vae_slicing'):
+                img2img_pipe.enable_vae_slicing()
+            
+            img2img_pipe.set_progress_bar_config(disable=True)
+            
+            self.img2img_pipelines[model_path] = img2img_pipe
+            logger.info(f"Created img2img pipeline for {model_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create img2img pipeline: {e}")
+    
+    def _load_init_image(self, image_data: str) -> Image.Image:
+        """Load initial image from base64 or file path"""
+        import base64
+        from io import BytesIO
+        
+        try:
+            # Check if it's a file path
+            if os.path.exists(image_data):
+                return Image.open(image_data).convert("RGB")
+            
+            # Try to decode as base64
+            if image_data.startswith('data:image'):
+                # Remove data URL prefix
+                image_data = image_data.split(',')[1]
+            
+            image_bytes = base64.b64decode(image_data)
+            image = Image.open(BytesIO(image_bytes)).convert("RGB")
+            return image
+            
+        except Exception as e:
+            logger.error(f"Failed to load init image: {e}")
+            raise ValueError(f"Invalid image data: {e}")
+    
     def _detect_sdxl(self, state_dict: Dict) -> bool:
         """Detect if model is SDXL based on state dict keys"""
         # SDXL has specific keys that SD 1.5 doesn't have
@@ -382,7 +467,15 @@ class InferenceEngine:
         if not model_to_use or model_to_use not in self.pipelines:
             raise ValueError(f"Model {model_to_use} not loaded")
         
-        pipe = self.pipelines[model_to_use]
+        # Determine if this is img2img or txt2img
+        is_img2img = request.init_image is not None
+        
+        if is_img2img:
+            if model_to_use not in self.img2img_pipelines:
+                raise ValueError(f"Img2img pipeline not available for model {model_to_use}")
+            pipe = self.img2img_pipelines[model_to_use]
+        else:
+            pipe = self.pipelines[model_to_use]
         
         # Log what we're getting
         logger.info(f"Retrieved pipeline for model {model_to_use}")
@@ -437,13 +530,23 @@ class InferenceEngine:
         generation_kwargs = {
             "prompt": request.prompt,
             "negative_prompt": request.negative_prompt,
-            "width": width,
-            "height": height,
             "num_inference_steps": actual_steps,
             "guidance_scale": request.cfg_scale,
             "generator": generator,
             "num_images_per_prompt": request.batch_size,
         }
+        
+        # Add img2img specific parameters
+        if is_img2img:
+            init_image = self._load_init_image(request.init_image)
+            # Resize image to match requested dimensions
+            init_image = init_image.resize((width, height), Image.LANCZOS)
+            generation_kwargs["image"] = init_image
+            generation_kwargs["strength"] = request.strength
+        else:
+            # txt2img needs width and height
+            generation_kwargs["width"] = width
+            generation_kwargs["height"] = height
         
         # Add callback for progress
         if progress_callback:

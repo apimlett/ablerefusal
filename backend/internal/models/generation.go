@@ -19,6 +19,9 @@ type GenerationRequest struct {
 	Seed        int64                  `json:"seed"`
 	BatchSize   int                    `json:"batch_size" binding:"min=1,max=10"`
 	Sampler     string                 `json:"sampler"`
+	// Image-to-image parameters
+	InitImage   string                 `json:"init_image,omitempty"`  // Base64 encoded image
+	Strength    float32                `json:"strength,omitempty"`    // Denoising strength (0.0-1.0)
 	ExtraParams map[string]interface{} `json:"extra_params,omitempty"`
 	CreatedAt   time.Time              `json:"created_at"`
 	UpdatedAt   time.Time              `json:"updated_at"`
@@ -35,6 +38,7 @@ func NewGenerationRequest() *GenerationRequest {
 		Seed:      -1, // Random seed
 		BatchSize: 1,
 		Sampler:   "euler_a",
+		Strength:  0.75, // Default denoising strength for img2img
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

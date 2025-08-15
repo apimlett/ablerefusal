@@ -23,6 +23,9 @@ export interface GenerationRequest {
   seed?: number;
   batch_size?: number;
   sampler?: string;
+  // Image-to-image parameters
+  init_image?: string;  // Base64 encoded image
+  strength?: number;    // Denoising strength (0.0-1.0)
 }
 
 export interface GenerationResponse {

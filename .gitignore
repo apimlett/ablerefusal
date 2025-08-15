@@ -42,3 +42,9 @@ Thumbs.db
 
 # Test files
 test_output.png
+
+# Private configuration
+CLAUDE.md
+
+# Documentation (as requested)
+/docs/
