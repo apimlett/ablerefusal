@@ -7,7 +7,7 @@
 ![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python)
 
-![AbleRefusal UI](https://github.com/apimlett/ablerefusal/assets/screenshot.png)
+![AbleRefusal UI](./assets/screenshot.png)
 
 ## ✨ Features
 
