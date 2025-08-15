@@ -180,7 +180,7 @@ models:
   available:
     - name: sd15
       path: ./models/sd15
-      type: onnx
+      type: safetensors
       version: 1.5
 
 inference:
@@ -349,10 +349,10 @@ npm run test:e2e
 
 ### Adding New Models
 
-1. Download or convert model to ONNX format
-2. Place in `models/` directory
-3. Add configuration to `config.yaml`
-4. Restart the backend server
+1. Download model from Hugging Face or place safetensors/ckpt file in `inference-service/models/`
+2. Models are automatically detected and available in the UI
+3. Supported formats: .safetensors, .ckpt, or Hugging Face model ID
+4. Restart the Python inference service if needed
 
 ### Model Conversion
 
@@ -462,7 +462,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Stable Diffusion by Stability AI
-- ONNX Runtime by Microsoft
+- Hugging Face Diffusers library
+- PyTorch by Meta
 - React and Next.js communities
 - All our contributors and users
 
