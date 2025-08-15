@@ -5,16 +5,19 @@ import { Sparkles, Github, Server, AlertCircle, Settings as SettingsIcon } from 
 import TabNavigation from '@/components/TabNavigation';
 import Text2ImageTab from '@/components/Text2ImageTab';
 import Image2ImageTab from '@/components/Image2ImageTab';
+import PrimaryPreview from '@/components/PrimaryPreview';
 import ImageGallery from '@/components/ImageGallery';
 import GenerationProgress from '@/components/GenerationProgress';
 import Settings from '@/components/Settings';
+import ModelSelector from '@/components/ModelSelector';
 import { useSettings } from '@/contexts/SettingsContext';
-import sdApi, { GenerationRequest, GenerationResult, GenerationStatus } from '@/lib/api';
+import sdApi, { GenerationRequest, GenerationResult, GenerationStatus, Model } from '@/lib/api';
 
 export default function Home() {
   const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState<'txt2img' | 'img2img'>('txt2img');
   const [images, setImages] = useState<GenerationResult[]>([]);
+  const [currentImage, setCurrentImage] = useState<GenerationResult | null>(null);
   const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -23,10 +26,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   
   // State for model management
-  const [models, setModels] = useState([
-    { id: 'runwayml/stable-diffusion-v1-5', name: 'Stable Diffusion 1.5' },
-    { id: 'stabilityai/stable-diffusion-2-1', name: 'Stable Diffusion 2.1' },
-  ]);
+  const [models, setModels] = useState<Model[]>([]);
   const [currentModel, setCurrentModel] = useState('runwayml/stable-diffusion-v1-5');
   
   // State for transferring between workflows
@@ -49,7 +49,8 @@ export default function Home() {
 
         if (status.status === 'completed') {
           setIsGenerating(false);
-          if (status.results) {
+          if (status.results && status.results.length > 0) {
+            setCurrentImage(status.results[0]);
             setImages(prev => [...status.results!, ...prev]);
           }
           setCurrentGenerationId(null);
@@ -74,6 +75,16 @@ export default function Home() {
     try {
       const health = await sdApi.health();
       setIsBackendReady(health.status === 'healthy');
+      
+      // Fetch available models
+      if (health.status === 'healthy') {
+        try {
+          const modelsResponse = await sdApi.getModels();
+          setModels(modelsResponse.models);
+        } catch (err) {
+          console.error('Failed to fetch models:', err);
+        }
+      }
     } catch (err) {
       setIsBackendReady(false);
     }
@@ -128,6 +139,22 @@ export default function Home() {
   const handleTransferConsumed = () => {
     setTransferredImage(null);
     setTransferredParams(null);
+  };
+
+  const handleRegenerate = (metadata: any) => {
+    const params: GenerationRequest = {
+      prompt: metadata.prompt || '',
+      negative_prompt: metadata.negative || metadata.negative_prompt || '',
+      width: parseInt(metadata.width) || 512,
+      height: parseInt(metadata.height) || 512,
+      steps: parseInt(metadata.steps) || 20,
+      cfg_scale: parseFloat(metadata.cfg_scale) || 7.5,
+      sampler: metadata.sampler || 'DPM++ 2M Karras',
+      seed: -1, // Use random seed for regeneration
+      batch_size: 1,
+      model: metadata.model || currentModel,
+    };
+    handleGenerate(params);
   };
 
   return (
@@ -203,6 +230,14 @@ export default function Home() {
           {/* Left Sidebar - Generation Form with Tabs */}
           <div className="lg:col-span-1">
             <div className="card sticky top-24">
+              {/* Model Selector - Shared between tabs */}
+              <ModelSelector
+                models={models}
+                currentModel={currentModel}
+                onModelChange={setCurrentModel}
+                className="mb-6"
+              />
+              
               {/* Tab Navigation */}
               <TabNavigation 
                 activeTab={activeTab}
@@ -215,17 +250,13 @@ export default function Home() {
                   <Text2ImageTab
                     onGenerate={handleGenerate}
                     isGenerating={isGenerating}
-                    models={models}
                     currentModel={currentModel}
-                    onModelChange={setCurrentModel}
                   />
                 ) : (
                   <Image2ImageTab
                     onGenerate={handleGenerate}
                     isGenerating={isGenerating}
-                    models={models}
                     currentModel={currentModel}
-                    onModelChange={setCurrentModel}
                     transferredImage={transferredImage}
                     transferredParams={transferredParams}
                     onTransferConsumed={handleTransferConsumed}
@@ -235,7 +266,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Content - Progress and Gallery */}
+          {/* Right Content - Progress, Preview and Gallery */}
           <div className="lg:col-span-2 space-y-6">
             {/* Error Display */}
             {error && (
@@ -252,14 +283,27 @@ export default function Home() {
               />
             )}
 
+            {/* Primary Preview */}
+            <div>
+              <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
+                Preview Canvas
+              </h2>
+              <PrimaryPreview 
+                currentImage={currentImage}
+                onUseInImg2Img={handleUseInImg2Img}
+                onRegenerate={handleRegenerate}
+              />
+            </div>
+
             {/* Image Gallery */}
             <div>
               <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
-                Generated Images
+                Generation History
               </h2>
               <ImageGallery 
                 images={images}
                 onUseInImg2Img={handleUseInImg2Img}
+                onImageClick={(image) => setCurrentImage(image)}
               />
             </div>
           </div>

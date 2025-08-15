@@ -3,10 +3,17 @@ package inference
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ablerefusal/ablerefusal/internal/config"
@@ -52,18 +59,28 @@ type PythonGenerateResponse struct {
 	Message string `json:"message"`
 }
 
+// PythonImageResult represents a single image result from Python service
+type PythonImageResult struct {
+	ImageID   string                 `json:"image_id"`
+	ImageData string                 `json:"image_data"` // Base64 encoded image
+	Seed      int64                  `json:"seed"`
+	Width     int                    `json:"width"`
+	Height    int                    `json:"height"`
+	Metadata  map[string]interface{} `json:"metadata"`
+}
+
 // PythonJobStatus represents job status from Python service
 type PythonJobStatus struct {
-	JobID       string    `json:"job_id"`
-	Status      string    `json:"status"`
-	Progress    float64   `json:"progress"`
-	CurrentStep int       `json:"current_step"`
-	TotalSteps  int       `json:"total_steps"`
-	Message     string    `json:"message,omitempty"`
-	Results     []string  `json:"results,omitempty"`
-	Error       string    `json:"error,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	CompletedAt time.Time `json:"completed_at,omitempty"`
+	JobID       string              `json:"job_id"`
+	Status      string              `json:"status"`
+	Progress    float64             `json:"progress"`
+	CurrentStep int                 `json:"current_step"`
+	TotalSteps  int                 `json:"total_steps"`
+	Message     string              `json:"message,omitempty"`
+	Results     []PythonImageResult `json:"results,omitempty"`
+	Error       string              `json:"error,omitempty"`
+	CreatedAt   time.Time           `json:"created_at"`
+	CompletedAt time.Time           `json:"completed_at,omitempty"`
 }
 
 // NewPythonEngine creates a new Python inference engine client
@@ -192,27 +209,69 @@ func (e *PythonEngine) Generate(ctx context.Context, req *models.GenerationReque
 		}
 	}
 
-	// Send generation request
+	// Marshal and encrypt request if needed
 	jsonData, err := json.Marshal(pythonReq)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := e.httpClient.Post(
-		e.baseURL+"/generate",
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+	var requestBody []byte
+	var contentType string
+	headers := make(map[string]string)
+
+	if os.Getenv("ENABLE_INFERENCE_ENCRYPTION") == "true" {
+		// Encrypt the request
+		encrypted, err := e.encryptIfNeeded(string(jsonData))
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt request: %w", err)
+		}
+		requestBody = []byte(encrypted)
+		contentType = "application/octet-stream"
+		headers["X-Encrypted"] = "true"
+	} else {
+		requestBody = jsonData
+		contentType = "application/json"
+	}
+
+	// Create request with headers
+	httpReq, err := http.NewRequest("POST", e.baseURL+"/generate", bytes.NewBuffer(requestBody))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", contentType)
+	for k, v := range headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	resp, err := e.httpClient.Do(httpReq)
 	if err != nil {
 		e.logger.WithError(err).Error("Failed to send generation request")
 		return e.mockGenerate(ctx, req, progressCallback)
 	}
 	defer resp.Body.Close()
 
-	// Parse response
+	// Parse response (decrypt if needed)
 	var genResp PythonGenerateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&genResp); err != nil {
-		return nil, fmt.Errorf("failed to parse generation response: %w", err)
+	
+	if os.Getenv("ENABLE_INFERENCE_ENCRYPTION") == "true" && resp.Header.Get("X-Encrypted") == "true" {
+		// Read and decrypt response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		
+		decrypted, err := e.decryptIfNeeded(string(body))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt response: %w", err)
+		}
+		
+		if err := json.Unmarshal([]byte(decrypted), &genResp); err != nil {
+			return nil, fmt.Errorf("failed to parse generation response: %w", err)
+		}
+	} else {
+		if err := json.NewDecoder(resp.Body).Decode(&genResp); err != nil {
+			return nil, fmt.Errorf("failed to parse generation response: %w", err)
+		}
 	}
 
 	if genResp.Status != "accepted" {
@@ -259,39 +318,157 @@ func (e *PythonEngine) getJobStatus(jobID string) (*PythonJobStatus, error) {
 	defer resp.Body.Close()
 
 	var status PythonJobStatus
-	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-		return nil, err
+	
+	if os.Getenv("ENABLE_INFERENCE_ENCRYPTION") == "true" && resp.Header.Get("X-Encrypted") == "true" {
+		// Read and decrypt response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		
+		decrypted, err := e.decryptIfNeeded(string(body))
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt job status: %w", err)
+		}
+		
+		if err := json.Unmarshal([]byte(decrypted), &status); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			return nil, err
+		}
 	}
 
 	return &status, nil
 }
 
-// processResults converts Python results to our format
+// processResults converts Python results to our format and saves images
 func (e *PythonEngine) processResults(req *models.GenerationRequest, status *PythonJobStatus) ([]*models.GenerationResult, error) {
 	results := make([]*models.GenerationResult, 0, len(status.Results))
 
-	for i, imagePath := range status.Results {
+	// Ensure outputs directory exists
+	outputsDir := e.storageConfig.OutputDir
+	if outputsDir == "" {
+		outputsDir = "./outputs"
+	}
+	if err := os.MkdirAll(outputsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create outputs directory: %w", err)
+	}
+
+	for i, imgResult := range status.Results {
+		// Decrypt base64 image data if encryption is enabled
+		imageData, err := e.decryptIfNeeded(imgResult.ImageData)
+		if err != nil {
+			e.logger.WithError(err).Error("Failed to decrypt image data")
+			return nil, fmt.Errorf("failed to decrypt image data: %w", err)
+		}
+
+		// Decode base64 image
+		imageBytes, err := base64.StdEncoding.DecodeString(imageData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode base64 image: %w", err)
+		}
+
+		// Generate filename
+		filename := fmt.Sprintf("%s.png", imgResult.ImageID)
+		filepath := filepath.Join(outputsDir, filename)
+
+		// Save image to disk
+		if err := os.WriteFile(filepath, imageBytes, 0644); err != nil {
+			return nil, fmt.Errorf("failed to save image: %w", err)
+		}
+
+		// Convert metadata to string map
+		metadata := make(map[string]string)
+		for k, v := range imgResult.Metadata {
+			metadata[k] = fmt.Sprintf("%v", v)
+		}
+		metadata["batch_index"] = fmt.Sprintf("%d", i)
+		metadata["generated_at"] = time.Now().Format(time.RFC3339)
+
 		result := &models.GenerationResult{
-			ImagePath: imagePath,
-			ImageURL:  fmt.Sprintf("/%s", imagePath), // imagePath already contains "outputs/" prefix
-			Seed:      req.Seed,
-			Width:     req.Width,
-			Height:    req.Height,
-			Metadata: map[string]string{
-				"prompt":        req.Prompt,
-				"negative":      req.NegPrompt,
-				"steps":         fmt.Sprintf("%d", req.Steps),
-				"cfg_scale":     fmt.Sprintf("%.1f", req.CFGScale),
-				"sampler":       req.Sampler,
-				"model":         req.Model,
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"batch_index":   fmt.Sprintf("%d", i),
-			},
+			ImagePath: filepath,
+			ImageURL:  fmt.Sprintf("/outputs/%s", filename),
+			Seed:      imgResult.Seed,
+			Width:     imgResult.Width,
+			Height:    imgResult.Height,
+			Metadata:  metadata,
 		}
 		results = append(results, result)
 	}
 
 	return results, nil
+}
+
+// encryptIfNeeded encrypts data if encryption is enabled
+func (e *PythonEngine) encryptIfNeeded(data string) (string, error) {
+	// Check if encryption is enabled via environment variable
+	if os.Getenv("ENABLE_INFERENCE_ENCRYPTION") != "true" {
+		return data, nil
+	}
+
+	key := e.getOrCreateEncryptionKey()
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	plaintext := []byte(data)
+	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
+	iv := ciphertext[:aes.BlockSize]
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return "", err
+	}
+
+	stream := cipher.NewCFBEncrypter(block, iv)
+	stream.XORKeyStream(ciphertext[aes.BlockSize:], plaintext)
+
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+// decryptIfNeeded decrypts data if encryption is enabled
+func (e *PythonEngine) decryptIfNeeded(data string) (string, error) {
+	// Check if encryption is enabled via environment variable
+	if os.Getenv("ENABLE_INFERENCE_ENCRYPTION") != "true" {
+		return data, nil
+	}
+
+	key := e.getOrCreateEncryptionKey()
+	ciphertext, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	if len(ciphertext) < aes.BlockSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
+	iv := ciphertext[:aes.BlockSize]
+	ciphertext = ciphertext[aes.BlockSize:]
+
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(ciphertext, ciphertext)
+
+	return string(ciphertext), nil
+}
+
+// getOrCreateEncryptionKey gets or creates an encryption key
+func (e *PythonEngine) getOrCreateEncryptionKey() []byte {
+	// Use a shared secret from environment or generate one
+	secret := os.Getenv("INFERENCE_ENCRYPTION_SECRET")
+	if secret == "" {
+		secret = "default-secret-key-change-in-production"
+	}
+
+	// Derive a 32-byte key using SHA256
+	hash := sha256.Sum256([]byte(secret))
+	return hash[:]
 }
 
 // mockGenerate provides fallback mock generation

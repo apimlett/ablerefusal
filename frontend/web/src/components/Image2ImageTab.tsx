@@ -5,10 +5,8 @@ import ImageUpload from './ImageUpload';
 interface Image2ImageTabProps {
   onGenerate: (params: any) => void;
   isGenerating: boolean;
-  models: Array<{ id: string; name: string }>;
   currentModel: string;
-  onModelChange: (model: string) => void;
-  transferredImage?: string;
+  transferredImage?: string | null;
   transferredParams?: any;
   onTransferConsumed?: () => void;
 }
@@ -16,9 +14,7 @@ interface Image2ImageTabProps {
 export default function Image2ImageTab({ 
   onGenerate, 
   isGenerating, 
-  models, 
-  currentModel, 
-  onModelChange,
+  currentModel,
   transferredImage,
   transferredParams,
   onTransferConsumed
@@ -50,16 +46,14 @@ export default function Image2ImageTab({
         setCfgScale(transferredParams.cfg_scale || 7.5);
         setSeed(transferredParams.seed || -1);
         setSampler(transferredParams.sampler || 'DPM++ 2M Karras');
-        if (transferredParams.model) {
-          onModelChange(transferredParams.model);
-        }
+        // Model is now handled at the parent level
       }
       // Notify parent that transfer has been consumed
       if (onTransferConsumed) {
         onTransferConsumed();
       }
     }
-  }, [transferredImage, transferredParams, onModelChange, onTransferConsumed]);
+  }, [transferredImage, transferredParams, onTransferConsumed]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,31 +91,6 @@ export default function Image2ImageTab({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Model Selection */}
-      <div>
-        <label className="block text-sm font-medium text-palenight-text mb-2">
-          Model
-        </label>
-        <div className="relative">
-          <select
-            value={currentModel}
-            onChange={(e) => onModelChange(e.target.value)}
-            className="w-full px-4 pr-12 py-3 bg-palenight-bgDark text-palenight-text rounded-lg border border-palenight-border focus:border-palenight-purple focus:ring-1 focus:ring-palenight-purple transition-colors appearance-none"
-          >
-            {models.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-palenight-comment">
-            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-              <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
       {/* Initial Image Upload */}
       <div>
         <label className="block text-sm font-medium text-palenight-text mb-2">

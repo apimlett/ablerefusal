@@ -7,6 +7,8 @@ __pycache__/
 
 # Build outputs
 /backend/ablerefusal-backend
+/backend/server
+/backend/sd-backend
 /frontend/web/.next/
 /frontend/web/out/
 dist/
@@ -47,6 +49,8 @@ Thumbs.db
 
 # Test files
 test_output.png
+test-*.html
+frontend/web/test-*.html
 
 # Private configuration
 CLAUDE.md

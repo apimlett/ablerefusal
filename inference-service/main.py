@@ -6,17 +6,24 @@ FastAPI service for Stable Diffusion inference with full diffusers support
 import os
 import asyncio
 import logging
+import base64
+import time
+import hashlib
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 from pathlib import Path
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_serializer
 import uvicorn
 import torch
+import json
 
 from inference_engine import InferenceEngine, GenerationRequest, GenerationResult
 
@@ -43,11 +50,79 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def encryption_middleware(request: Request, call_next):
+    """Middleware to handle encrypted requests and responses"""
+    # Skip encryption for health endpoint
+    if request.url.path == "/health":
+        return await call_next(request)
+    
+    # Only process POST requests with bodies
+    if request.method == "POST" and os.getenv("ENABLE_INFERENCE_ENCRYPTION") == "true":
+        # Check if request has encrypted content
+        if request.headers.get("X-Encrypted") == "true":
+            try:
+                # Read and decrypt the body
+                body = await request.body()
+                decrypted_data = decrypt_json_request(body)
+                
+                # Create new request with decrypted body
+                async def receive():
+                    return {
+                        "type": "http.request",
+                        "body": json.dumps(decrypted_data).encode()
+                    }
+                
+                request._receive = receive
+            except Exception as e:
+                logger.error(f"Failed to decrypt request: {e}")
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "Failed to decrypt request"}
+                )
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Encrypt response if needed (for JSON responses)
+    if os.getenv("ENABLE_INFERENCE_ENCRYPTION") == "true" and request.url.path != "/health":
+        # Check if it's a JSON response
+        if response.headers.get("content-type", "").startswith("application/json"):
+            # Read the response body
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk
+            
+            try:
+                # Parse and encrypt the JSON
+                json_data = json.loads(body)
+                encrypted_body = encrypt_if_needed(json.dumps(json_data))
+                
+                # Return encrypted response
+                return Response(
+                    content=encrypted_body,
+                    media_type="application/octet-stream",
+                    headers={"X-Encrypted": "true"}
+                )
+            except:
+                # If not JSON or encryption fails, return original
+                return Response(content=body, media_type=response.headers.get("content-type"))
+    
+    return response
+
 # Global inference engine instance
 inference_engine: Optional[InferenceEngine] = None
 
-# In-memory job storage (replace with Redis in production)
+# In-memory job storage with TTL support
 jobs: Dict[str, Dict[str, Any]] = {}
+
+# Request deduplication cache
+request_cache: Dict[str, str] = {}  # hash -> job_id
+
+# Configuration
+JOB_CACHE_MINUTES = int(os.getenv("JOB_CACHE_MINUTES", "3"))
+CLEANUP_INTERVAL_SECONDS = int(os.getenv("CLEANUP_INTERVAL_SECONDS", "30"))
+REQUEST_CACHE_SECONDS = int(os.getenv("REQUEST_CACHE_SECONDS", "30"))
 
 
 class HealthResponse(BaseModel):
@@ -82,6 +157,15 @@ class GenerateResponse(BaseModel):
     message: str
 
 
+class ImageResult(BaseModel):
+    image_id: str
+    image_data: str  # Base64 encoded image
+    seed: int
+    width: int
+    height: int
+    metadata: Dict[str, Any]
+
+
 class JobStatus(BaseModel):
     job_id: str
     status: str  # "pending", "processing", "completed", "failed"
@@ -89,7 +173,7 @@ class JobStatus(BaseModel):
     current_step: int
     total_steps: int
     message: Optional[str] = None
-    results: Optional[List[str]] = None  # Image URLs/paths
+    results: Optional[List[ImageResult]] = None  # List of image results
     error: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
@@ -104,12 +188,135 @@ class JobStatus(BaseModel):
         return None
 
 
+def get_encryption_key():
+    """Get or create encryption key from environment"""
+    secret = os.getenv("INFERENCE_ENCRYPTION_SECRET", "default-secret-key-change-in-production")
+    # Derive a 32-byte key using SHA256
+    digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+    digest.update(secret.encode())
+    return digest.finalize()
+
+def encrypt_if_needed(data: str) -> str:
+    """Encrypt data if encryption is enabled"""
+    if os.getenv("ENABLE_INFERENCE_ENCRYPTION") != "true":
+        return data
+    
+    key = get_encryption_key()
+    iv = os.urandom(16)  # AES block size
+    
+    cipher = Cipher(
+        algorithms.AES(key),
+        modes.CFB(iv),
+        backend=default_backend()
+    )
+    encryptor = cipher.encryptor()
+    
+    plaintext = data.encode()
+    ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+    
+    # Combine IV and ciphertext, then base64 encode
+    encrypted = base64.b64encode(iv + ciphertext).decode('utf-8')
+    return encrypted
+
+def decrypt_if_needed(data: str) -> str:
+    """Decrypt data if encryption is enabled"""
+    if os.getenv("ENABLE_INFERENCE_ENCRYPTION") != "true":
+        return data
+    
+    key = get_encryption_key()
+    encrypted_bytes = base64.b64decode(data)
+    
+    # Extract IV and ciphertext
+    iv = encrypted_bytes[:16]
+    ciphertext = encrypted_bytes[16:]
+    
+    cipher = Cipher(
+        algorithms.AES(key),
+        modes.CFB(iv),
+        backend=default_backend()
+    )
+    decryptor = cipher.decryptor()
+    
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+    return plaintext.decode('utf-8')
+
+def encrypt_json_response(data: dict) -> str:
+    """Encrypt JSON response if encryption is enabled"""
+    if os.getenv("ENABLE_INFERENCE_ENCRYPTION") != "true":
+        return json.dumps(data)
+    
+    json_str = json.dumps(data)
+    return encrypt_if_needed(json_str)
+
+def decrypt_json_request(encrypted_body: bytes) -> dict:
+    """Decrypt JSON request if encryption is enabled"""
+    if os.getenv("ENABLE_INFERENCE_ENCRYPTION") != "true":
+        return json.loads(encrypted_body)
+    
+    # Decrypt the body
+    decrypted = decrypt_if_needed(encrypted_body.decode('utf-8'))
+    return json.loads(decrypted)
+
+async def cleanup_expired_jobs():
+    """Background task to clean up expired jobs and request cache"""
+    while True:
+        try:
+            current_time = datetime.now(timezone.utc)
+            
+            # Clean up expired jobs
+            expired_jobs = []
+            for job_id, job_data in jobs.items():
+                created_at = job_data.get("created_at")
+                if created_at and isinstance(created_at, datetime):
+                    age_minutes = (current_time - created_at).total_seconds() / 60
+                    if age_minutes > JOB_CACHE_MINUTES:
+                        expired_jobs.append(job_id)
+            
+            for job_id in expired_jobs:
+                logger.info(f"Cleaning up expired job: {job_id} (aged out after {JOB_CACHE_MINUTES} minutes)")
+                del jobs[job_id]
+            
+            if expired_jobs:
+                logger.info(f"Cleaned up {len(expired_jobs)} expired jobs")
+            
+            # Clean up expired request cache entries
+            expired_requests = []
+            current_timestamp = time.time()
+            for req_hash, cache_data in list(request_cache.items()):
+                if isinstance(cache_data, dict):
+                    if current_timestamp - cache_data.get("timestamp", 0) > REQUEST_CACHE_SECONDS:
+                        expired_requests.append(req_hash)
+            
+            for req_hash in expired_requests:
+                del request_cache[req_hash]
+            
+            # Wait before next cleanup
+            await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
+            
+        except Exception as e:
+            logger.error(f"Error in cleanup task: {e}")
+            await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize the inference engine on startup"""
     global inference_engine
     
     logger.info("Starting AbleRefusal Inference Service...")
+    
+    # Log configuration
+    logger.info(f"Job cache TTL: {JOB_CACHE_MINUTES} minutes")
+    logger.info(f"Cleanup interval: {CLEANUP_INTERVAL_SECONDS} seconds")
+    logger.info(f"Request deduplication cache: {REQUEST_CACHE_SECONDS} seconds")
+    
+    # Log encryption status
+    if os.getenv("ENABLE_INFERENCE_ENCRYPTION") == "true":
+        logger.info("End-to-end encryption is ENABLED for image transfers")
+    else:
+        logger.info("End-to-end encryption is DISABLED for image transfers")
+    
+    # Start cleanup task
+    asyncio.create_task(cleanup_expired_jobs())
     
     # Initialize inference engine
     # Use MPS on Mac, CUDA on Linux/Windows, CPU as fallback
@@ -170,8 +377,33 @@ async def generate_image(
     if not inference_engine:
         raise HTTPException(status_code=503, detail="Inference engine not initialized")
     
-    # Create job ID
+    # Check request cache for deduplication
+    request_hash = hashlib.sha256(
+        f"{request.prompt}{request.negative_prompt}{request.width}{request.height}"
+        f"{request.steps}{request.cfg_scale}{request.sampler}{request.model}".encode()
+    ).hexdigest()[:16]
+    
+    # Check if identical request is already processing
+    if request_hash in request_cache:
+        cache_entry = request_cache[request_hash]
+        if isinstance(cache_entry, dict) and time.time() - cache_entry.get("timestamp", 0) < REQUEST_CACHE_SECONDS:
+            existing_job_id = cache_entry.get("job_id")
+            if existing_job_id in jobs:
+                logger.info(f"Request deduplicated, returning existing job: {existing_job_id}")
+                return GenerateResponse(
+                    job_id=existing_job_id,
+                    status="accepted",
+                    message="Using existing generation job (duplicate request)"
+                )
+    
+    # Create new job ID
     job_id = str(uuid.uuid4())
+    
+    # Add to request cache
+    request_cache[request_hash] = {
+        "job_id": job_id,
+        "timestamp": time.time()
+    }
     
     # Initialize job status
     jobs[job_id] = {
@@ -234,10 +466,20 @@ async def run_generation(job_id: str, request: GenerateRequest):
             progress_callback=progress_callback
         )
         
-        # Update job status
+        # Update job status with base64 image data
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["progress"] = 100.0
-        jobs[job_id]["results"] = [r.image_path for r in results]
+        jobs[job_id]["results"] = [
+            {
+                "image_id": r.image_path,  # Use image_path as ID
+                "image_data": encrypt_if_needed(r.image_data),  # Encrypted base64 image
+                "seed": r.seed,
+                "width": r.width,
+                "height": r.height,
+                "metadata": r.metadata
+            }
+            for r in results
+        ]
         jobs[job_id]["completed_at"] = datetime.now(timezone.utc)
         
     except Exception as e:

@@ -4,18 +4,14 @@ import { Zap, ChevronDown, ChevronUp } from 'lucide-react';
 interface Text2ImageTabProps {
   onGenerate: (params: any) => void;
   isGenerating: boolean;
-  models: Array<{ id: string; name: string }>;
   currentModel: string;
-  onModelChange: (model: string) => void;
   onTransferToImg2Img?: (params: any) => void;
 }
 
 export default function Text2ImageTab({ 
   onGenerate, 
   isGenerating, 
-  models, 
-  currentModel, 
-  onModelChange,
+  currentModel,
   onTransferToImg2Img 
 }: Text2ImageTabProps) {
   const [prompt, setPrompt] = useState('');
@@ -64,31 +60,6 @@ export default function Text2ImageTab({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Model Selection */}
-      <div>
-        <label className="block text-sm font-medium text-palenight-text mb-2">
-          Model
-        </label>
-        <div className="relative">
-          <select
-            value={currentModel}
-            onChange={(e) => onModelChange(e.target.value)}
-            className="w-full px-4 pr-12 py-3 bg-palenight-bgDark text-palenight-text rounded-lg border border-palenight-border focus:border-palenight-purple focus:ring-1 focus:ring-palenight-purple transition-colors appearance-none"
-          >
-            {models.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-palenight-comment">
-            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-              <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
       {/* Fast Mode Toggle */}
       <div className="flex items-center justify-between p-4 bg-palenight-bgDark rounded-lg border border-palenight-border">
         <div className="flex items-center gap-3">

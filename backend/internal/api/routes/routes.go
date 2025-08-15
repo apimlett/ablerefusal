@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/ablerefusal/ablerefusal/internal/api/handlers"
@@ -25,7 +26,7 @@ func Setup(cfg *config.Config, queueManager queue.Manager, storageManager storag
 	// Configure CORS
 	if cfg.Server.EnableCORS {
 		corsConfig := cors.DefaultConfig()
-		corsConfig.AllowOrigins = []string{"http://localhost:3000", "http://localhost:1420"}
+		corsConfig.AllowOrigins = []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://localhost:1420"}
 		corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 		corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 		corsConfig.AllowCredentials = true
@@ -62,6 +63,7 @@ func Setup(cfg *config.Config, queueManager queue.Manager, storageManager storag
 						"version":     "1.5",
 						"description": "Base Stable Diffusion v1.5 model",
 						"ready":       true,
+						"loaded":      false, // TODO: Get actual loaded state from inference engine
 					},
 					{
 						"id":          "stabilityai/stable-diffusion-2-1",
@@ -70,6 +72,7 @@ func Setup(cfg *config.Config, queueManager queue.Manager, storageManager storag
 						"version":     "2.1",
 						"description": "Stable Diffusion v2.1 model",
 						"ready":       false,
+						"loaded":      false,
 					},
 					{
 						"id":          "stabilityai/stable-diffusion-xl-base-1.0",
@@ -78,6 +81,67 @@ func Setup(cfg *config.Config, queueManager queue.Manager, storageManager storag
 						"version":     "xl-1.0",
 						"description": "Stable Diffusion XL base model",
 						"ready":       false,
+						"loaded":      false,
+					},
+				},
+			})
+		})
+
+		// Model loading endpoints  
+		v1.POST("/models/load", func(c *gin.Context) {
+			var req struct {
+				ModelPath string `json:"model_path" binding:"required"`
+				ModelType string `json:"model_type"`
+			}
+			
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			// TODO: Forward to Python service via inference engine
+			// For now, return a mock response
+			logger.WithFields(logrus.Fields{
+				"model_path": req.ModelPath,
+				"model_type": req.ModelType,
+			}).Info("Model load requested")
+
+			c.JSON(http.StatusOK, gin.H{
+				"status":  "success",
+				"message": fmt.Sprintf("Model %s load initiated", req.ModelPath),
+			})
+		})
+
+		v1.POST("/models/unload", func(c *gin.Context) {
+			var req struct {
+				ModelPath string `json:"model_path" binding:"required"`
+			}
+			
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			logger.WithField("model_path", req.ModelPath).Info("Model unload requested")
+
+			c.JSON(http.StatusOK, gin.H{
+				"status":  "success", 
+				"message": fmt.Sprintf("Model %s unloaded", req.ModelPath),
+			})
+		})
+
+		v1.GET("/models/status", func(c *gin.Context) {
+			// TODO: Get actual loaded models from inference engine
+			c.JSON(http.StatusOK, gin.H{
+				"loaded_models": []string{},
+				"available_models": []gin.H{
+					{
+						"id":          "runwayml/stable-diffusion-v1-5",
+						"name":        "Stable Diffusion 1.5",
+						"type":        "pytorch",
+						"version":     "1.5",
+						"description": "Base Stable Diffusion v1.5 model",
+						"ready":       true,
 					},
 				},
 			})

@@ -63,6 +63,8 @@ export interface Model {
   version: string;
   description: string;
   ready: boolean;
+  loaded?: boolean;
+  loading?: boolean;
 }
 
 export interface QueueStatus {
@@ -117,6 +119,27 @@ export const sdApi = {
   // Get models
   async getModels(): Promise<{ models: Model[] }> {
     const response = await api.get('/models');
+    return response.data;
+  },
+
+  // Load a model
+  async loadModel(modelPath: string, modelType: string = 'safetensors'): Promise<{ status: string; message: string }> {
+    const response = await api.post('/models/load', { 
+      model_path: modelPath, 
+      model_type: modelType 
+    });
+    return response.data;
+  },
+
+  // Unload a model
+  async unloadModel(modelPath: string): Promise<{ status: string; message: string }> {
+    const response = await api.post('/models/unload', { model_path: modelPath });
+    return response.data;
+  },
+
+  // Get loaded models status
+  async getLoadedModels(): Promise<{ loaded_models: string[]; available_models: Model[] }> {
+    const response = await api.get('/models/status');
     return response.data;
   },
 

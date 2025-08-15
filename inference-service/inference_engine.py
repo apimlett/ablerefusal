@@ -5,6 +5,8 @@ Supports Civitai models, LoRAs, LCM, and advanced samplers
 
 import os
 import gc
+import io
+import base64
 import logging
 from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass
@@ -61,11 +63,12 @@ class GenerationRequest:
 
 @dataclass
 class GenerationResult:
-    image_path: str
+    image_path: str  # Now serves as image ID
     seed: int
     width: int
     height: int
     metadata: Dict[str, Any]
+    image_data: Optional[str] = None  # Base64 encoded image data
 
 
 class InferenceEngine:
@@ -580,22 +583,24 @@ class InferenceEngine:
             if self.device == "mps" and hasattr(torch.mps, 'empty_cache'):
                 torch.mps.empty_cache()
             
-            # Save images and create results
+            # Convert images to base64 and create results
             results = []
             for i, image in enumerate(output.images):
-                # Generate unique filename
+                # Convert PIL image to base64
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG")
+                image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                
+                # Generate unique identifier for this image
                 image_hash = hashlib.md5(
                     f"{request.prompt}_{actual_seed}_{i}".encode()
                 ).hexdigest()[:8]
-                filename = f"{image_hash}_{actual_seed}_{i}.png"
-                filepath = self.outputs_dir / filename
+                image_id = f"{image_hash}_{actual_seed}_{i}"
                 
-                # Save image
-                image.save(filepath)
-                
-                # Create result
+                # Create result with base64 data
                 result = GenerationResult(
-                    image_path=str(filepath),
+                    image_path=image_id,  # Use ID instead of file path
+                    image_data=image_base64,  # Add base64 data
                     seed=actual_seed,
                     width=request.width,
                     height=request.height,
