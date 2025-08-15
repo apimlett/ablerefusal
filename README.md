@@ -7,8 +7,7 @@
 ![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python)
 
-<!-- Screenshot placeholder - add screenshot.png to assets folder -->
-<!-- ![AbleRefusal UI](./assets/screenshot.png) -->
+![AbleRefusal UI](./assets/screenshot.png)
 
 ## ✨ Features
 
