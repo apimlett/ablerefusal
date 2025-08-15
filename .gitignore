@@ -15,9 +15,14 @@ build/
 # Generated files
 /inference-service/outputs/
 /backend/outputs
+
+# Ignore image files except in assets folder
 *.png
 *.jpg
 *.jpeg
+!assets/*.png
+!assets/*.jpg
+!assets/*.jpeg
 
 # Model files (too large for git)
 /inference-service/models/
