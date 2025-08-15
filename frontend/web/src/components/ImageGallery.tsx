@@ -2,16 +2,17 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Download, Maximize2, X, Info, Copy, Check } from 'lucide-react';
+import { Download, Maximize2, X, Info, Copy, Check, ArrowRight } from 'lucide-react';
 import { GenerationResult } from '@/lib/api';
 import sdApi from '@/lib/api';
 
 interface ImageGalleryProps {
   images: GenerationResult[];
   onImageClick?: (image: GenerationResult) => void;
+  onUseInImg2Img?: (imageUrl: string, metadata: any) => void;
 }
 
-export default function ImageGallery({ images, onImageClick }: ImageGalleryProps) {
+export default function ImageGallery({ images, onImageClick, onUseInImg2Img }: ImageGalleryProps) {
   const [selectedImage, setSelectedImage] = useState<GenerationResult | null>(null);
   const [copiedSeed, setCopiedSeed] = useState<number | null>(null);
 
@@ -82,6 +83,18 @@ export default function ImageGallery({ images, onImageClick }: ImageGalleryProps
 
               {/* Action buttons */}
               <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {onUseInImg2Img && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUseInImg2Img(sdApi.getImageUrl(image.image_url), image.metadata);
+                    }}
+                    className="p-2 bg-palenight-purple/80 backdrop-blur-sm rounded-lg hover:bg-palenight-purple transition-colors"
+                    title="Use in img2img"
+                  >
+                    <ArrowRight className="w-4 h-4 text-white" />
+                  </button>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -223,21 +236,35 @@ export default function ImageGallery({ images, onImageClick }: ImageGalleryProps
                   </div>
 
                   {/* Actions */}
-                  <div className="flex space-x-2 pt-4">
-                    <button
-                      onClick={() => handleDownload(selectedImage)}
-                      className="btn-primary flex-1 flex items-center justify-center space-x-2"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Download</span>
-                    </button>
-                    <button
-                      onClick={() => copySeed(selectedImage.seed)}
-                      className="btn-secondary flex-1 flex items-center justify-center space-x-2"
-                    >
-                      <Copy className="w-4 h-4" />
-                      <span>Copy Seed</span>
-                    </button>
+                  <div className="flex flex-col space-y-2 pt-4">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleDownload(selectedImage)}
+                        className="btn-primary flex-1 flex items-center justify-center space-x-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download</span>
+                      </button>
+                      <button
+                        onClick={() => copySeed(selectedImage.seed)}
+                        className="btn-secondary flex-1 flex items-center justify-center space-x-2"
+                      >
+                        <Copy className="w-4 h-4" />
+                        <span>Copy Seed</span>
+                      </button>
+                    </div>
+                    {onUseInImg2Img && (
+                      <button
+                        onClick={() => {
+                          onUseInImg2Img(sdApi.getImageUrl(selectedImage.image_url), selectedImage.metadata);
+                          setSelectedImage(null);
+                        }}
+                        className="w-full btn-primary bg-gradient-to-r from-palenight-purple to-palenight-pink flex items-center justify-center space-x-2"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        <span>Use in Image to Image</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

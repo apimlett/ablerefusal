@@ -68,10 +68,6 @@ export default function ImageUpload({
 
   return (
     <div className="w-full">
-      <label className="block text-sm font-medium text-palenight-text mb-2">
-        Initial Image (Optional)
-      </label>
-      
       {!currentImage ? (
         <div
           onClick={handleClick}

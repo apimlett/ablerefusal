@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Github, Server, AlertCircle, Settings as SettingsIcon } from 'lucide-react';
-import GenerationForm from '@/components/GenerationForm';
+import TabNavigation from '@/components/TabNavigation';
+import Text2ImageTab from '@/components/Text2ImageTab';
+import Image2ImageTab from '@/components/Image2ImageTab';
 import ImageGallery from '@/components/ImageGallery';
 import GenerationProgress from '@/components/GenerationProgress';
 import Settings from '@/components/Settings';
@@ -11,6 +13,7 @@ import sdApi, { GenerationRequest, GenerationResult, GenerationStatus } from '@/
 
 export default function Home() {
   const { settings } = useSettings();
+  const [activeTab, setActiveTab] = useState<'txt2img' | 'img2img'>('txt2img');
   const [images, setImages] = useState<GenerationResult[]>([]);
   const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null);
@@ -18,6 +21,17 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isBackendReady, setIsBackendReady] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  
+  // State for model management
+  const [models, setModels] = useState([
+    { id: 'runwayml/stable-diffusion-v1-5', name: 'Stable Diffusion 1.5' },
+    { id: 'stabilityai/stable-diffusion-2-1', name: 'Stable Diffusion 2.1' },
+  ]);
+  const [currentModel, setCurrentModel] = useState('runwayml/stable-diffusion-v1-5');
+  
+  // State for transferring between workflows
+  const [transferredImage, setTransferredImage] = useState<string | null>(null);
+  const [transferredParams, setTransferredParams] = useState<any>(null);
 
   // Check backend status on mount
   useEffect(() => {
@@ -91,6 +105,31 @@ export default function Home() {
     }
   };
 
+  const handleUseInImg2Img = (imageUrl: string, metadata: any) => {
+    // Convert the image URL to base64
+    fetch(imageUrl)
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          setTransferredImage(base64);
+          setTransferredParams(metadata);
+          setActiveTab('img2img');
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch(err => {
+        console.error('Failed to transfer image:', err);
+        setError('Failed to transfer image to img2img');
+      });
+  };
+
+  const handleTransferConsumed = () => {
+    setTransferredImage(null);
+    setTransferredParams(null);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-palenight">
       {/* Header */}
@@ -127,7 +166,7 @@ export default function Home() {
               
               {/* GitHub Link */}
               <a
-                href="https://github.com/yourusername/ablerefusal"
+                href="https://github.com/apimlett/ablerefusal"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2 text-palenight-text hover:text-palenight-textBright transition-colors"
@@ -161,16 +200,38 @@ export default function Home() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Sidebar - Generation Form */}
+          {/* Left Sidebar - Generation Form with Tabs */}
           <div className="lg:col-span-1">
             <div className="card sticky top-24">
-              <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
-                Generation Settings
-              </h2>
-              <GenerationForm 
-                onSubmit={handleGenerate} 
-                isGenerating={isGenerating}
+              {/* Tab Navigation */}
+              <TabNavigation 
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
               />
+              
+              {/* Tab Content */}
+              <div className="mt-6">
+                {activeTab === 'txt2img' ? (
+                  <Text2ImageTab
+                    onGenerate={handleGenerate}
+                    isGenerating={isGenerating}
+                    models={models}
+                    currentModel={currentModel}
+                    onModelChange={setCurrentModel}
+                  />
+                ) : (
+                  <Image2ImageTab
+                    onGenerate={handleGenerate}
+                    isGenerating={isGenerating}
+                    models={models}
+                    currentModel={currentModel}
+                    onModelChange={setCurrentModel}
+                    transferredImage={transferredImage}
+                    transferredParams={transferredParams}
+                    onTransferConsumed={handleTransferConsumed}
+                  />
+                )}
+              </div>
             </div>
           </div>
 
@@ -196,7 +257,10 @@ export default function Home() {
               <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
                 Generated Images
               </h2>
-              <ImageGallery images={images} />
+              <ImageGallery 
+                images={images}
+                onUseInImg2Img={handleUseInImg2Img}
+              />
             </div>
           </div>
         </div>
