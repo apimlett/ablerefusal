@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Upload, X } from 'lucide-react';
-import ImageUpload from './ImageUpload';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import Img2ImgModeSelector, { Img2ImgMode } from './img2img/Img2ImgModeSelector';
+import NormalMode from './img2img/modes/NormalMode';
+import SketchMode from './img2img/modes/SketchMode';
 
 interface Image2ImageTabProps {
   onGenerate: (params: any) => void;
@@ -9,6 +11,8 @@ interface Image2ImageTabProps {
   transferredImage?: string | null;
   transferredParams?: any;
   onTransferConsumed?: () => void;
+  mode?: Img2ImgMode;
+  onModeChange?: (mode: Img2ImgMode) => void;
 }
 
 export default function Image2ImageTab({ 
@@ -17,9 +21,15 @@ export default function Image2ImageTab({
   currentModel,
   transferredImage,
   transferredParams,
-  onTransferConsumed
+  onTransferConsumed,
+  mode = 'normal',
+  onModeChange
 }: Image2ImageTabProps) {
+  // Use prop mode instead of local state
+  const currentMode = mode;
   const [initImage, setInitImage] = useState<string | null>(null);
+  const [sketchData, setSketchData] = useState<string | null>(null);
+  const [maskData, setMaskData] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [strength, setStrength] = useState(0.75);
@@ -63,10 +73,10 @@ export default function Image2ImageTab({
       return;
     }
     
-    const params = {
+    const params: any = {
       prompt,
       negative_prompt: negativePrompt,
-      init_image: initImage,
+      init_image: currentMode === 'sketch' && sketchData ? sketchData : initImage,
       strength,
       width,
       height,
@@ -77,6 +87,16 @@ export default function Image2ImageTab({
       batch_size: 1,
       model: currentModel,
     };
+    
+    // Add mask data for inpaint modes
+    if ((currentMode === 'inpaint' || currentMode === 'inpaint_sketch') && maskData) {
+      params.mask = maskData;
+    }
+    
+    // Add sketch overlay for inpaint_sketch mode
+    if (currentMode === 'inpaint_sketch' && sketchData) {
+      params.sketch = sketchData;
+    }
     
     onGenerate(params);
   };
@@ -91,43 +111,41 @@ export default function Image2ImageTab({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Initial Image Upload */}
-      <div>
-        <label className="block text-sm font-medium text-palenight-text mb-2">
-          Initial Image *
-        </label>
-        <ImageUpload
+      {/* Mode-specific content */}
+      {currentMode === 'normal' && (
+        <NormalMode
+          initImage={initImage}
           onImageSelect={handleImageSelect}
           onImageClear={handleImageClear}
-          currentImage={initImage}
-          disabled={isGenerating}
+          isGenerating={isGenerating}
+          strength={strength}
+          onStrengthChange={setStrength}
         />
-      </div>
+      )}
 
-      {/* Denoising Strength */}
-      <div>
-        <label className="block text-sm font-medium text-palenight-text mb-2">
-          Denoising Strength: {strength.toFixed(2)}
-        </label>
-        <div className="space-y-2">
-          <input
-            type="range"
-            value={strength}
-            onChange={(e) => setStrength(Number(e.target.value))}
-            min="0"
-            max="1"
-            step="0.05"
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-palenight-comment">
-            <span>More Original</span>
-            <span>More Creative</span>
-          </div>
+      {currentMode === 'sketch' && (
+        <SketchMode
+          initImage={initImage}
+          onImageSelect={handleImageSelect}
+          onImageClear={handleImageClear}
+          onSketchChange={setSketchData}
+          isGenerating={isGenerating}
+          strength={strength}
+          onStrengthChange={setStrength}
+        />
+      )}
+
+      {currentMode === 'inpaint' && (
+        <div className="text-palenight-comment p-4 bg-palenight-bgDark rounded-lg">
+          Inpaint mode coming soon in Stage 3
         </div>
-        <p className="text-sm text-palenight-comment mt-2">
-          Lower values preserve more of the original image, higher values allow more changes
-        </p>
-      </div>
+      )}
+
+      {currentMode === 'inpaint_sketch' && (
+        <div className="text-palenight-comment p-4 bg-palenight-bgDark rounded-lg">
+          Inpaint Sketch mode coming soon in Stage 5
+        </div>
+      )}
 
       {/* Prompt */}
       <div>

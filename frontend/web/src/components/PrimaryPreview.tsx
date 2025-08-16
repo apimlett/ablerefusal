@@ -10,21 +10,33 @@ import {
   Copy, 
   ArrowRight,
   Info,
-  RefreshCw
+  RefreshCw,
+  Image,
+  Brush,
+  Eraser,
+  Layers
 } from 'lucide-react';
 import { GenerationResult } from '@/lib/api';
 import sdApi from '@/lib/api';
+
+type Img2ImgMode = 'normal' | 'sketch' | 'inpaint' | 'inpaint_sketch';
 
 interface PrimaryPreviewProps {
   currentImage: GenerationResult | null;
   onUseInImg2Img?: (imageUrl: string, metadata: any) => void;
   onRegenerate?: (params: any) => void;
+  isImg2Img?: boolean;
+  img2imgMode?: Img2ImgMode;
+  onImg2ImgModeChange?: (mode: Img2ImgMode) => void;
 }
 
 export default function PrimaryPreview({ 
   currentImage, 
   onUseInImg2Img,
-  onRegenerate
+  onRegenerate,
+  isImg2Img = false,
+  img2imgMode = 'normal',
+  onImg2ImgModeChange
 }: PrimaryPreviewProps) {
   const [zoom, setZoom] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
@@ -103,19 +115,100 @@ export default function PrimaryPreview({
 
   if (!currentImage) {
     return (
-      <div className="bg-palenight-bgDark rounded-xl border border-palenight-border p-8">
-        <div className="flex flex-col items-center justify-center h-96 text-center">
-          <div className="w-16 h-16 mb-4 rounded-full bg-palenight-bgLight flex items-center justify-center">
-            <Maximize2 className="w-8 h-8 text-palenight-comment" />
+      <div className="bg-palenight-bgDark rounded-xl border border-palenight-border overflow-hidden">
+        <div className="p-8">
+          <div className="flex flex-col items-center justify-center h-96 text-center">
+            <div className="w-16 h-16 mb-4 rounded-full bg-palenight-bgLight flex items-center justify-center">
+              <Maximize2 className="w-8 h-8 text-palenight-comment" />
+            </div>
+            <h3 className="text-lg font-medium text-palenight-text mb-2">
+              No Image Generated Yet
+            </h3>
+            <p className="text-sm text-palenight-comment max-w-md">
+              Your generated images will appear here. This preview area will display your latest creation 
+              and serve as a canvas for advanced editing features.
+            </p>
           </div>
-          <h3 className="text-lg font-medium text-palenight-text mb-2">
-            No Image Generated Yet
-          </h3>
-          <p className="text-sm text-palenight-comment max-w-md">
-            Your generated images will appear here. This preview area will display your latest creation 
-            and serve as a canvas for advanced editing features.
-          </p>
         </div>
+        
+        {/* Img2Img Mode Navigation (Bottom Edge) - Empty State */}
+        {isImg2Img && onImg2ImgModeChange && (
+          <div className="bg-palenight-bgLight border-t border-palenight-border p-3">
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onImg2ImgModeChange('normal');
+                }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                  img2imgMode === 'normal'
+                    ? 'bg-palenight-purple text-white'
+                    : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+                }`}
+                title="Normal mode - Upload an image and modify it with prompts"
+              >
+                <Image className="w-4 h-4" />
+                Normal
+              </button>
+              
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onImg2ImgModeChange('sketch');
+                }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                  img2imgMode === 'sketch'
+                    ? 'bg-palenight-purple text-white'
+                    : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+                }`}
+                title="Sketch mode - Draw on top of the image"
+              >
+                <Brush className="w-4 h-4" />
+                Sketch
+              </button>
+              
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onImg2ImgModeChange('inpaint');
+                }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                  img2imgMode === 'inpaint'
+                    ? 'bg-palenight-purple text-white'
+                    : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+                }`}
+                title="Inpaint mode - Mask areas to regenerate"
+              >
+                <Eraser className="w-4 h-4" />
+                Inpaint
+              </button>
+              
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onImg2ImgModeChange('inpaint_sketch');
+                }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                  img2imgMode === 'inpaint_sketch'
+                    ? 'bg-palenight-purple text-white'
+                    : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+                }`}
+                title="Inpaint Sketch mode - Combine masking and drawing"
+              >
+                <Layers className="w-4 h-4" />
+                Inpaint Sketch
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -301,6 +394,85 @@ export default function PrimaryPreview({
           style={{ display: 'none' }} // Hidden for now, will be used for inpainting
         />
       </div>
+
+      {/* Img2Img Mode Navigation (Bottom Edge) */}
+      {isImg2Img && onImg2ImgModeChange && (  
+        <div className="bg-palenight-bgLight border-t border-palenight-border p-3">
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onImg2ImgModeChange('normal');
+              }}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                img2imgMode === 'normal'
+                  ? 'bg-palenight-purple text-white'
+                  : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+              }`}
+              title="Normal mode - Upload an image and modify it with prompts"
+            >
+              <Image className="w-4 h-4" />
+              Normal
+            </button>
+            
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onImg2ImgModeChange('sketch');
+              }}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                img2imgMode === 'sketch'
+                  ? 'bg-palenight-purple text-white'
+                  : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+              }`}
+              title="Sketch mode - Draw on top of the image"
+            >
+              <Brush className="w-4 h-4" />
+              Sketch
+            </button>
+            
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onImg2ImgModeChange('inpaint');
+              }}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                img2imgMode === 'inpaint'
+                  ? 'bg-palenight-purple text-white'
+                  : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+              }`}
+              title="Inpaint mode - Mask areas to regenerate"
+            >
+              <Eraser className="w-4 h-4" />
+              Inpaint
+            </button>
+            
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onImg2ImgModeChange('inpaint_sketch');
+              }}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                img2imgMode === 'inpaint_sketch'
+                  ? 'bg-palenight-purple text-white'
+                  : 'bg-palenight-bgDark text-palenight-text hover:bg-palenight-highlight'
+              }`}
+              title="Inpaint Sketch mode - Combine masking and drawing"
+            >
+              <Layers className="w-4 h-4" />
+              Inpaint Sketch
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

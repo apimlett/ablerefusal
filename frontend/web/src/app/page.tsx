@@ -34,6 +34,7 @@ export default function Home() {
   const [img2imgGenerationStatus, setImg2imgGenerationStatus] = useState<GenerationStatus | null>(null);
   const [img2imgIsGenerating, setImg2imgIsGenerating] = useState(false);
   const [img2imgError, setImg2imgError] = useState<string | null>(null);
+  const [img2imgMode, setImg2imgMode] = useState<'normal' | 'sketch' | 'inpaint' | 'inpaint_sketch'>('normal');
   
   // Helper functions to get current workflow state
   const images = activeTab === 'txt2img' ? txt2imgImages : img2imgImages;
@@ -342,6 +343,8 @@ export default function Home() {
                     transferredImage={transferredImage}
                     transferredParams={transferredParams}
                     onTransferConsumed={handleTransferConsumed}
+                    mode={img2imgMode}
+                    onModeChange={setImg2imgMode}
                   />
                 )}
               </div>
@@ -417,6 +420,9 @@ export default function Home() {
                     currentImage={img2imgCurrentImage}
                     onUseInImg2Img={handleUseInImg2Img}
                     onRegenerate={handleRegenerate}
+                    isImg2Img={true}
+                    img2imgMode={img2imgMode}
+                    onImg2ImgModeChange={setImg2imgMode}
                   />
                 </div>
 
