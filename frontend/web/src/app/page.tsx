@@ -16,14 +16,39 @@ import sdApi, { GenerationRequest, GenerationResult, GenerationStatus, Model } f
 export default function Home() {
   const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState<'txt2img' | 'img2img'>('txt2img');
-  const [images, setImages] = useState<GenerationResult[]>([]);
-  const [currentImage, setCurrentImage] = useState<GenerationResult | null>(null);
-  const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null);
-  const [generationStatus, setGenerationStatus] = useState<GenerationStatus | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isBackendReady, setIsBackendReady] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Text2Img workflow state
+  const [txt2imgImages, setTxt2imgImages] = useState<GenerationResult[]>([]);
+  const [txt2imgCurrentImage, setTxt2imgCurrentImage] = useState<GenerationResult | null>(null);
+  const [txt2imgGenerationId, setTxt2imgGenerationId] = useState<string | null>(null);
+  const [txt2imgGenerationStatus, setTxt2imgGenerationStatus] = useState<GenerationStatus | null>(null);
+  const [txt2imgIsGenerating, setTxt2imgIsGenerating] = useState(false);
+  const [txt2imgError, setTxt2imgError] = useState<string | null>(null);
+  
+  // Img2Img workflow state
+  const [img2imgImages, setImg2imgImages] = useState<GenerationResult[]>([]);
+  const [img2imgCurrentImage, setImg2imgCurrentImage] = useState<GenerationResult | null>(null);
+  const [img2imgGenerationId, setImg2imgGenerationId] = useState<string | null>(null);
+  const [img2imgGenerationStatus, setImg2imgGenerationStatus] = useState<GenerationStatus | null>(null);
+  const [img2imgIsGenerating, setImg2imgIsGenerating] = useState(false);
+  const [img2imgError, setImg2imgError] = useState<string | null>(null);
+  
+  // Helper functions to get current workflow state
+  const images = activeTab === 'txt2img' ? txt2imgImages : img2imgImages;
+  const currentImage = activeTab === 'txt2img' ? txt2imgCurrentImage : img2imgCurrentImage;
+  const currentGenerationId = activeTab === 'txt2img' ? txt2imgGenerationId : img2imgGenerationId;
+  const generationStatus = activeTab === 'txt2img' ? txt2imgGenerationStatus : img2imgGenerationStatus;
+  const isGenerating = activeTab === 'txt2img' ? txt2imgIsGenerating : img2imgIsGenerating;
+  const error = activeTab === 'txt2img' ? txt2imgError : img2imgError;
+  
+  const setImages = activeTab === 'txt2img' ? setTxt2imgImages : setImg2imgImages;
+  const setCurrentImage = activeTab === 'txt2img' ? setTxt2imgCurrentImage : setImg2imgCurrentImage;
+  const setCurrentGenerationId = activeTab === 'txt2img' ? setTxt2imgGenerationId : setImg2imgGenerationId;
+  const setGenerationStatus = activeTab === 'txt2img' ? setTxt2imgGenerationStatus : setImg2imgGenerationStatus;
+  const setIsGenerating = activeTab === 'txt2img' ? setTxt2imgIsGenerating : setImg2imgIsGenerating;
+  const setError = activeTab === 'txt2img' ? setTxt2imgError : setImg2imgError;
   
   // State for model management
   const [models, setModels] = useState<Model[]>([]);
@@ -38,38 +63,71 @@ export default function Home() {
     checkBackendStatus();
   }, []);
 
-  // Poll for generation status
+  // Poll for txt2img generation status
   useEffect(() => {
-    if (!currentGenerationId || !isGenerating) return;
+    if (!txt2imgGenerationId || !txt2imgIsGenerating) return;
 
     const pollInterval = setInterval(async () => {
       try {
-        const status = await sdApi.getStatus(currentGenerationId);
-        setGenerationStatus(status);
+        const status = await sdApi.getStatus(txt2imgGenerationId);
+        setTxt2imgGenerationStatus(status);
 
         if (status.status === 'completed') {
-          setIsGenerating(false);
+          setTxt2imgIsGenerating(false);
           if (status.results && status.results.length > 0) {
-            setCurrentImage(status.results[0]);
-            setImages(prev => [...status.results!, ...prev]);
+            setTxt2imgCurrentImage(status.results[0]);
+            setTxt2imgImages(prev => [...status.results!, ...prev]);
           }
-          setCurrentGenerationId(null);
+          setTxt2imgGenerationId(null);
         } else if (status.status === 'failed' || status.status === 'cancelled') {
-          setIsGenerating(false);
-          setCurrentGenerationId(null);
+          setTxt2imgIsGenerating(false);
+          setTxt2imgGenerationId(null);
           if (status.status === 'failed') {
-            setError(status.error || 'Generation failed');
+            setTxt2imgError(status.error || 'Generation failed');
           }
         }
       } catch (err) {
-        console.error('Failed to fetch status:', err);
-        setError('Failed to fetch generation status');
-        setIsGenerating(false);
+        console.error('Failed to fetch txt2img status:', err);
+        setTxt2imgError('Failed to fetch generation status');
+        setTxt2imgIsGenerating(false);
       }
     }, 1000);
 
     return () => clearInterval(pollInterval);
-  }, [currentGenerationId, isGenerating]);
+  }, [txt2imgGenerationId, txt2imgIsGenerating]);
+
+  // Poll for img2img generation status
+  useEffect(() => {
+    if (!img2imgGenerationId || !img2imgIsGenerating) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await sdApi.getStatus(img2imgGenerationId);
+        setImg2imgGenerationStatus(status);
+
+        if (status.status === 'completed') {
+          setImg2imgIsGenerating(false);
+          if (status.results && status.results.length > 0) {
+            setImg2imgCurrentImage(status.results[0]);
+            setImg2imgImages(prev => [...status.results!, ...prev]);
+          }
+          setImg2imgGenerationId(null);
+        } else if (status.status === 'failed' || status.status === 'cancelled') {
+          setImg2imgIsGenerating(false);
+          setImg2imgGenerationId(null);
+          if (status.status === 'failed') {
+            setImg2imgError(status.error || 'Generation failed');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch img2img status:', err);
+        setImg2imgError('Failed to fetch generation status');
+        setImg2imgIsGenerating(false);
+      }
+    }, 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [img2imgGenerationId, img2imgIsGenerating]);
 
   const checkBackendStatus = async () => {
     try {
@@ -91,28 +149,52 @@ export default function Home() {
   };
 
   const handleGenerate = async (data: GenerationRequest) => {
-    setError(null);
-    setIsGenerating(true);
+    // Determine which workflow is being used based on whether init_image is present
+    const isImg2Img = !!data.init_image;
     
-    try {
-      const response = await sdApi.generate(data);
-      setCurrentGenerationId(response.id);
-    } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Failed to start generation');
-      setIsGenerating(false);
+    if (isImg2Img) {
+      setImg2imgError(null);
+      setImg2imgIsGenerating(true);
+      try {
+        const response = await sdApi.generate(data);
+        setImg2imgGenerationId(response.id);
+      } catch (err: any) {
+        setImg2imgError(err.response?.data?.error || err.message || 'Failed to start generation');
+        setImg2imgIsGenerating(false);
+      }
+    } else {
+      setTxt2imgError(null);
+      setTxt2imgIsGenerating(true);
+      try {
+        const response = await sdApi.generate(data);
+        setTxt2imgGenerationId(response.id);
+      } catch (err: any) {
+        setTxt2imgError(err.response?.data?.error || err.message || 'Failed to start generation');
+        setTxt2imgIsGenerating(false);
+      }
     }
   };
 
   const handleCancel = async () => {
-    if (!currentGenerationId) return;
-    
-    try {
-      await sdApi.cancel(currentGenerationId);
-      setIsGenerating(false);
-      setCurrentGenerationId(null);
-      setGenerationStatus(null);
-    } catch (err) {
-      console.error('Failed to cancel generation:', err);
+    // Cancel the active workflow's generation
+    if (activeTab === 'txt2img' && txt2imgGenerationId) {
+      try {
+        await sdApi.cancel(txt2imgGenerationId);
+        setTxt2imgIsGenerating(false);
+        setTxt2imgGenerationId(null);
+        setTxt2imgGenerationStatus(null);
+      } catch (err) {
+        console.error('Failed to cancel txt2img generation:', err);
+      }
+    } else if (activeTab === 'img2img' && img2imgGenerationId) {
+      try {
+        await sdApi.cancel(img2imgGenerationId);
+        setImg2imgIsGenerating(false);
+        setImg2imgGenerationId(null);
+        setImg2imgGenerationStatus(null);
+      } catch (err) {
+        console.error('Failed to cancel img2img generation:', err);
+      }
     }
   };
 
@@ -249,13 +331,13 @@ export default function Home() {
                 {activeTab === 'txt2img' ? (
                   <Text2ImageTab
                     onGenerate={handleGenerate}
-                    isGenerating={isGenerating}
+                    isGenerating={txt2imgIsGenerating}
                     currentModel={currentModel}
                   />
                 ) : (
                   <Image2ImageTab
                     onGenerate={handleGenerate}
-                    isGenerating={isGenerating}
+                    isGenerating={img2imgIsGenerating}
                     currentModel={currentModel}
                     transferredImage={transferredImage}
                     transferredParams={transferredParams}
@@ -268,44 +350,91 @@ export default function Home() {
 
           {/* Right Content - Progress, Preview and Gallery */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Error Display */}
-            {error && (
-              <div className="p-4 bg-palenight-red/10 border border-palenight-red rounded-lg">
-                <p className="text-palenight-red">{error}</p>
-              </div>
+            {/* Text2Img Workflow Content */}
+            {activeTab === 'txt2img' && (
+              <>
+                {/* Error Display */}
+                {txt2imgError && (
+                  <div className="p-4 bg-palenight-red/10 border border-palenight-red rounded-lg">
+                    <p className="text-palenight-red">{txt2imgError}</p>
+                  </div>
+                )}
+
+                {/* Generation Progress */}
+                {txt2imgGenerationStatus && (
+                  <GenerationProgress 
+                    status={txt2imgGenerationStatus}
+                    onCancel={handleCancel}
+                  />
+                )}
+
+                {/* Primary Preview */}
+                <div>
+                  <PrimaryPreview 
+                    currentImage={txt2imgCurrentImage}
+                    onUseInImg2Img={handleUseInImg2Img}
+                    onRegenerate={handleRegenerate}
+                  />
+                </div>
+
+                {/* Image Gallery */}
+                {txt2imgImages.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
+                      History
+                    </h2>
+                    <ImageGallery 
+                      images={txt2imgImages}
+                      onUseInImg2Img={handleUseInImg2Img}
+                      onImageClick={(image) => setTxt2imgCurrentImage(image)}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
-            {/* Generation Progress */}
-            {generationStatus && (
-              <GenerationProgress 
-                status={generationStatus}
-                onCancel={handleCancel}
-              />
+            {/* Img2Img Workflow Content */}
+            {activeTab === 'img2img' && (
+              <>
+                {/* Error Display */}
+                {img2imgError && (
+                  <div className="p-4 bg-palenight-red/10 border border-palenight-red rounded-lg">
+                    <p className="text-palenight-red">{img2imgError}</p>
+                  </div>
+                )}
+
+                {/* Generation Progress */}
+                {img2imgGenerationStatus && (
+                  <GenerationProgress 
+                    status={img2imgGenerationStatus}
+                    onCancel={handleCancel}
+                  />
+                )}
+
+                {/* Primary Preview */}
+                <div>
+                  <PrimaryPreview 
+                    currentImage={img2imgCurrentImage}
+                    onUseInImg2Img={handleUseInImg2Img}
+                    onRegenerate={handleRegenerate}
+                  />
+                </div>
+
+                {/* Image Gallery */}
+                {img2imgImages.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
+                      History
+                    </h2>
+                    <ImageGallery 
+                      images={img2imgImages}
+                      onUseInImg2Img={handleUseInImg2Img}
+                      onImageClick={(image) => setImg2imgCurrentImage(image)}
+                    />
+                  </div>
+                )}
+              </>
             )}
-
-            {/* Primary Preview */}
-            <div>
-              <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
-                Preview Canvas
-              </h2>
-              <PrimaryPreview 
-                currentImage={currentImage}
-                onUseInImg2Img={handleUseInImg2Img}
-                onRegenerate={handleRegenerate}
-              />
-            </div>
-
-            {/* Image Gallery */}
-            <div>
-              <h2 className="text-lg font-semibold text-palenight-textBright mb-4">
-                Generation History
-              </h2>
-              <ImageGallery 
-                images={images}
-                onUseInImg2Img={handleUseInImg2Img}
-                onImageClick={(image) => setCurrentImage(image)}
-              />
-            </div>
           </div>
         </div>
       </main>
